@@ -208,10 +208,7 @@ def run_local_search(
     )
 
     reporter.info(f"Vector Store Args: {vector_store_args}")
-    if "type" in vector_store_args:
-        vector_store_type = vector_store_args.get("type")
-    else:
-        vector_store_type=VectorStoreType.LanceDB
+    vector_store_type = vector_store_args.get("type", VectorStoreType.LanceDB) # verify kusto vector store here.
 
     entities = read_indexer_entities(final_nodes, final_entities, community_level) # KustoDB: read Final nodes data and entities data and merge it.
     description_embedding_store = __get_embedding_description_store(
@@ -226,13 +223,16 @@ def run_local_search(
         else []
     )
 
+    if(isinstance(description_embedding_store, KustoVectorStore)):
+        entities = []
+
     search_engine = get_local_search_engine(
         config,
         reports=read_indexer_reports(
             final_community_reports, final_nodes, community_level
         ),
         text_units=read_indexer_text_units(final_text_units),
-        entities=entities if vector_store_type==VectorStoreType.LanceDB else [],
+        entities=entities,
         relationships=read_indexer_relationships(final_relationships),
         covariates={"claims": covariates},
         description_embedding_store=description_embedding_store,
