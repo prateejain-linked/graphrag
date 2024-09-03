@@ -34,6 +34,7 @@ from .graph.extractors.community_reports.prompts import COMMUNITY_REPORT_PROMPT
 from .graph.extractors.graph.prompts import GRAPH_EXTRACTION_PROMPT
 from .graph.extractors.summarize.prompts import SUMMARIZE_PROMPT
 from .init_content import INIT_DOTENV, INIT_YAML
+from azure.cosmos import CosmosClient, PartitionKey
 
 # Ignore warnings from numba
 warnings.filterwarnings("ignore", message=".*NumbaDeprecationWarning.*")
@@ -103,7 +104,7 @@ def index_cli(
         pipeline_config: str | PipelineConfig = config or _create_default_config(
             root, None, verbose, dryrun or False, progress_reporter
         )
-    if context_id:
+    if context_id and context_operation:
         if not is_valid_guid(context_id):
             ValueError("ContextId is invalid: It should be a valid Guid")
         if (context_operation != ContextSwitchType.Activate and context_operation != ContextSwitchType.Deactivate):
@@ -118,6 +119,20 @@ def index_cli(
             use_kusto_community_reports,
         )
         sys.exit(0)
+    graphrag_config = _read_config_parameters("./",config,progress_reporter)
+    if graphrag_config.graphdb.enabled:
+        cosmos_client = CosmosClient(
+            f"https://{graphrag_config.graphdb.account_name}.documents.azure.com:443/",
+            f"{graphrag_config.graphdb.account_key}",
+        )
+        database_name = graphrag_config.graphdb.username.split("/")[2]
+        database = cosmos_client.get_database_client(database_name)
+        graph_name=graphrag_config.graphdb.username.split("/")[-1]+"-contextid-"+context_id
+        graph = database.create_container_if_not_exists(
+            id=graph_name,
+            partition_key=PartitionKey(path='/category'),
+            offer_throughput=400
+        )
     cache = NoopPipelineCache() if nocache else None
     pipeline_emit = emit.split(",") if emit else None
     encountered_errors = False
