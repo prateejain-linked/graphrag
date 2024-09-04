@@ -7,22 +7,41 @@ from typing import Any, cast
 
 import pandas as pd
 
+from common.graph_db_client import GraphDBClient
 from graphrag.model import Entity, Relationship
 
+from graphrag.query.input.loaders.dfs import read_relationships
 
 def get_in_network_relationships(
     selected_entities: list[Entity],
     relationships: list[Relationship],
     ranking_attribute: str = "rank",
+    graphdb_client: GraphDBClient|None=None,
 ) -> list[Relationship]:
     """Get all directed relationships between selected entities, sorted by ranking_attribute."""
     selected_entity_names = [entity.title for entity in selected_entities]
-    selected_relationships = [
-        relationship
-        for relationship in relationships
-        if relationship.source in selected_entity_names
-        and relationship.target in selected_entity_names
-    ]
+    if not graphdb_client:
+        selected_relationships = [
+            relationship
+            for relationship in relationships
+            if relationship.source in selected_entity_names
+            and relationship.target in selected_entity_names
+        ]
+    else:
+        selected_relationships_result = graphdb_client._client.submit(
+            message=(
+                "g.E()"
+                ".where(inV().has('name',within(prop_selected_entity_names)))"
+                ".where(outV().has('name',within(prop_selected_entity_names)))"
+            ),
+            bindings={
+                "prop_selected_entity_names": selected_entity_names,
+            }
+        )
+        selected_relationships = read_relationships(
+            graphdb_client.result_to_df(selected_relationships_result),
+            short_id_col="human_readable_id"
+        )
     if len(selected_relationships) <= 1:
         return selected_relationships
 
@@ -36,21 +55,52 @@ def get_out_network_relationships(
     selected_entities: list[Entity],
     relationships: list[Relationship],
     ranking_attribute: str = "rank",
+    graphdb_client: GraphDBClient|None=None,
 ) -> list[Relationship]:
     """Get relationships from selected entities to other entities that are not within the selected entities, sorted by ranking_attribute."""
     selected_entity_names = [entity.title for entity in selected_entities]
-    source_relationships = [
-        relationship
-        for relationship in relationships
-        if relationship.source in selected_entity_names
-        and relationship.target not in selected_entity_names
-    ]
-    target_relationships = [
-        relationship
-        for relationship in relationships
-        if relationship.target in selected_entity_names
-        and relationship.source not in selected_entity_names
-    ]
+    if not graphdb_client:
+        source_relationships = [
+            relationship
+            for relationship in relationships
+            if relationship.source in selected_entity_names
+            and relationship.target not in selected_entity_names
+        ]
+        target_relationships = [
+            relationship
+            for relationship in relationships
+            if relationship.target in selected_entity_names
+            and relationship.source not in selected_entity_names
+        ]
+    else:
+        source_relationships_result = graphdb_client._client.submit(
+            message=(
+                "g.E()"
+                ".where(inV().has('name',without(prop_selected_entity_names)))"
+                ".where(outV().has('name',within(prop_selected_entity_names)))"
+            ),
+            bindings={
+                "prop_selected_entity_names": selected_entity_names,
+            }
+        )
+        source_relationships = read_relationships(
+            graphdb_client.result_to_df(source_relationships_result),
+            short_id_col="human_readable_id"
+        )
+        target_relationships_result = graphdb_client._client.submit(
+            message=(
+                "g.E()"
+                ".where(outV().has('name',without(prop_selected_entity_names)))"
+                ".where(inV().has('name',within(prop_selected_entity_names)))"
+            ),
+            bindings={
+                "prop_selected_entity_names": selected_entity_names,
+            }
+        )
+        target_relationships = read_relationships(
+            graphdb_client.result_to_df(target_relationships_result),
+            short_id_col="human_readable_id"
+        )
     selected_relationships = source_relationships + target_relationships
     return sort_relationships_by_ranking_attribute(
         selected_relationships, selected_entities, ranking_attribute
