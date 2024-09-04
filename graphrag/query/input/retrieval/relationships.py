@@ -12,6 +12,18 @@ from graphrag.model import Entity, Relationship
 
 from graphrag.query.input.loaders.dfs import read_relationships
 
+def get_relationships_from_graphdb(query:str,selected_entity_names:list[str],graphdb_client: GraphDBClient):
+    relationships_result=graphdb_client._client.submit(
+        message=query,
+        bindings={
+            "prop_selected_entity_names": selected_entity_names,
+        }
+    )
+    return read_relationships(
+        graphdb_client.result_to_df(relationships_result),
+        short_id_col="human_readable_id"
+    )
+
 def get_in_network_relationships(
     selected_entities: list[Entity],
     relationships: list[Relationship],
@@ -28,19 +40,14 @@ def get_in_network_relationships(
             and relationship.target in selected_entity_names
         ]
     else:
-        selected_relationships_result = graphdb_client._client.submit(
-            message=(
+        selected_relationships = get_relationships_from_graphdb(
+            query=(
                 "g.E()"
                 ".where(inV().has('name',within(prop_selected_entity_names)))"
                 ".where(outV().has('name',within(prop_selected_entity_names)))"
             ),
-            bindings={
-                "prop_selected_entity_names": selected_entity_names,
-            }
-        )
-        selected_relationships = read_relationships(
-            graphdb_client.result_to_df(selected_relationships_result),
-            short_id_col="human_readable_id"
+            selected_entity_names=selected_entity_names,
+            graphdb_client=graphdb_client
         )
     if len(selected_relationships) <= 1:
         return selected_relationships
@@ -72,36 +79,20 @@ def get_out_network_relationships(
             if relationship.target in selected_entity_names
             and relationship.source not in selected_entity_names
         ]
+        selected_relationships = source_relationships + target_relationships
     else:
-        source_relationships_result = graphdb_client._client.submit(
-            message=(
-                "g.E()"
-                ".where(inV().has('name',without(prop_selected_entity_names)))"
+        selected_relationships = get_relationships_from_graphdb(
+            query=(
+                "g.E().union("
+                "__.where(outV().has('name',without(prop_selected_entity_names)))"
+                ".where(inV().has('name',within(prop_selected_entity_names))),"
+                "__.where(inV().has('name',without(prop_selected_entity_names)))"
                 ".where(outV().has('name',within(prop_selected_entity_names)))"
+                ")"
             ),
-            bindings={
-                "prop_selected_entity_names": selected_entity_names,
-            }
+            selected_entity_names= selected_entity_names,
+            graphdb_client=graphdb_client
         )
-        source_relationships = read_relationships(
-            graphdb_client.result_to_df(source_relationships_result),
-            short_id_col="human_readable_id"
-        )
-        target_relationships_result = graphdb_client._client.submit(
-            message=(
-                "g.E()"
-                ".where(outV().has('name',without(prop_selected_entity_names)))"
-                ".where(inV().has('name',within(prop_selected_entity_names)))"
-            ),
-            bindings={
-                "prop_selected_entity_names": selected_entity_names,
-            }
-        )
-        target_relationships = read_relationships(
-            graphdb_client.result_to_df(target_relationships_result),
-            short_id_col="human_readable_id"
-        )
-    selected_relationships = source_relationships + target_relationships
     return sort_relationships_by_ranking_attribute(
         selected_relationships, selected_entities, ranking_attribute
     )
