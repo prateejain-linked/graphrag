@@ -2,13 +2,33 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "<define a name here>",
+            "name": "Indexer",
             "type": "debugpy",
-            "python": "<Path to a python interpreter of your choice>",
+            "python": "C:\\Repos\\PrateekGR\\graphrag\\.venv\\Scripts\\python.exe",
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "module": "poetry",
-            "args": ["poe", "<command here: index or query?>", "other args"],
+            "args": ["poe", "index", "--root", ".\\ragtest6", "--verbose"],
+            "stopOnEntry": false
+        },
+        {
+            "name": "Query",
+            "type": "debugpy",
+            "python": "C:\\Repos\\PrateekGR\\graphrag\\.venv\\Scripts\\python.exe",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "module": "poetry",
+            "args": ["poe", "query", "--root", ".\\ragtest6", "--method", "local", "--context_id", "TestContext",  "How Guillermo got certificate access?"],
+            "stopOnEntry": false
+        },
+        {
+            "name": "Context Switch",
+            "type": "debugpy",
+            "python": "C:\\Repos\\PrateekGR\\graphrag\\.venv\\Scripts\\python.exe",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "module": "poetry",
+            "args": ["poe", "index", "--context_id", "TestContext", "--context_operation", "activate", "--root", ".\\ragtest6"],
             "stopOnEntry": false
         }
     ]
