@@ -4,9 +4,14 @@
 """Create OpenAI client instance."""
 
 import logging
+import os
 from functools import cache
 
-from azure.identity import ManagedIdentityCredential, get_bearer_token_provider
+from azure.identity import (
+    InteractiveBrowserCredential,
+    ManagedIdentityCredential,
+    get_bearer_token_provider,
+)
 from openai import AsyncAzureOpenAI, AsyncOpenAI
 
 from .openai_configuration import OpenAIConfiguration
@@ -37,13 +42,14 @@ def create_openai_client(
         else:
             cognitive_services_endpoint = configuration.cognitive_services_endpoint
 
+        env = os.environ.get("ENVIRONMENT")
         return AsyncAzureOpenAI(
             api_key=configuration.api_key if configuration.api_key else None,
             azure_ad_token_provider=get_bearer_token_provider(
-                ManagedIdentityCredential(client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3"), cognitive_services_endpoint
+                ManagedIdentityCredential(client_id="500051c4-c242-4018-9ae4-fb983cfebefd"), cognitive_services_endpoint
             )
-            if not configuration.api_key
-            else None,
+            if env != "DEVELOPMENT"
+            else InteractiveBrowserCredential(),
             organization=configuration.organization,
             # Azure-Specifics
             api_version=configuration.api_version,

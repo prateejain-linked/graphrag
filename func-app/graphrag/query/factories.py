@@ -3,14 +3,20 @@
 
 """Query Factory methods to support CLI."""
 
-from graphrag.config.models.graphdb_config import GraphDBConfig
+import os
+
 import tiktoken
-from azure.identity import ManagedIdentityCredential, get_bearer_token_provider
+from azure.identity import (
+    InteractiveBrowserCredential,
+    ManagedIdentityCredential,
+    get_bearer_token_provider,
+)
 
 from graphrag.config import (
     GraphRagConfig,
     LLMType,
 )
+from graphrag.config.models.graphdb_config import GraphDBConfig
 from graphrag.model import (
     CommunityReport,
     Covariate,
@@ -49,14 +55,15 @@ def get_llm(config: GraphRagConfig) -> ChatOpenAI:
     else:
         cognitive_services_endpoint = config.llm.cognitive_services_endpoint
     print(f"creating llm client with {llm_debug_info}")  # noqa T201
+    env = os.environ.get("ENVIRONMENT")
     return ChatOpenAI(
         api_key=config.llm.api_key,
         azure_ad_token_provider=(
             get_bearer_token_provider(
-                ManagedIdentityCredential(client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3"), cognitive_services_endpoint
+                ManagedIdentityCredential(client_id="500051c4-c242-4018-9ae4-fb983cfebefd"), cognitive_services_endpoint
             )
-            if is_azure_client and not config.llm.api_key
-            else None
+            if env != "DEVELOPMENT"
+            else InteractiveBrowserCredential(),
         ),
         api_base=config.llm.api_base,
         organization=config.llm.organization,
@@ -81,14 +88,15 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
     else:
         cognitive_services_endpoint = config.embeddings.llm.cognitive_services_endpoint
     print(f"creating embedding llm client with {llm_debug_info}")  # noqa T201
+    env = os.environ.get("ENVIRONMENT")
     return OpenAIEmbedding(
         api_key=config.embeddings.llm.api_key,
         azure_ad_token_provider=(
             get_bearer_token_provider(
-                ManagedIdentityCredential(client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3"), cognitive_services_endpoint
+                ManagedIdentityCredential(client_id="500051c4-c242-4018-9ae4-fb983cfebefd"), cognitive_services_endpoint
             )
-            if is_azure_client and not config.embeddings.llm.api_key
-            else None
+            if env != "DEVELOPMENT"
+            else InteractiveBrowserCredential(),
         ),
         api_base=config.embeddings.llm.api_base,
         organization=config.llm.organization,
