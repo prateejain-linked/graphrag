@@ -5,7 +5,7 @@
 
 from graphrag.config.models.graphdb_config import GraphDBConfig
 import tiktoken
-from azure.identity import ManagedIdentityCredential, get_bearer_token_provider, DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 from graphrag.config import (
     GraphRagConfig,
@@ -49,12 +49,13 @@ def get_llm(config: GraphRagConfig) -> ChatOpenAI:
     else:
         cognitive_services_endpoint = config.llm.cognitive_services_endpoint
     print(f"creating llm client with {llm_debug_info}")  # noqa T201
+    creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
+                                     exclude_interactive_browser_credential = False)
     return ChatOpenAI(
         api_key=config.llm.api_key,
         azure_ad_token_provider=(
             get_bearer_token_provider(
-                DefaultAzureCredential(managed_identity_client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3", exclude_interactive_browser_credential = False), cognitive_services_endpoint
-
+                creds, cognitive_services_endpoint
             )
             if is_azure_client and not config.llm.api_key
             else None
@@ -82,12 +83,13 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
     else:
         cognitive_services_endpoint = config.embeddings.llm.cognitive_services_endpoint
     print(f"creating embedding llm client with {llm_debug_info}")  # noqa T201
+    creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
+                                     exclude_interactive_browser_credential = False)
     return OpenAIEmbedding(
         api_key=config.embeddings.llm.api_key,
         azure_ad_token_provider=(
             get_bearer_token_provider(
-                DefaultAzureCredential(managed_identity_client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3", exclude_interactive_browser_credential = False), cognitive_services_endpoint
-
+                creds, cognitive_services_endpoint
             )
             if is_azure_client and not config.embeddings.llm.api_key
             else None
