@@ -50,27 +50,7 @@ def create_openai_client(
         )
 
         return r 
-    
-        return AsyncAzureOpenAI(
-            api_key=configuration.api_key if configuration.api_key else None,
-            azure_ad_token_provider=get_bearer_token_provider(
-                #ManagedIdentityCredential(client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3")
-                InteractiveBrowserCredential()
-                #DefaultAzureCredential(managed_identity_client_id="295ce65c-28c6-4763-be6f-a5eb36c3ceb3", exclude_interactive_browser_credential = False)
-                #DefaultAzureCredential()
-                , cognitive_services_endpoint
-            )
-            if not configuration.api_key
-            else None,
-            organization=configuration.organization,
-            # Azure-Specifics
-            api_version=configuration.api_version,
-            azure_endpoint=api_base,
-            azure_deployment=configuration.deployment_name,
-            # Timeout/Retry Configuration - Use Tenacity for Retries, so disable them here
-            timeout=configuration.request_timeout or 180.0,
-            max_retries=0,
-        )
+
 
     log.info("Creating OpenAI client base_url=%s", configuration.api_base)
     return AsyncOpenAI(
