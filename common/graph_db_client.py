@@ -95,16 +95,17 @@ class GraphDBClient:
             query_bindings={}
             iter_row=0
             for row in spilt_df.itertuples():
-                if self.element_exists("g.V()",row.id):
-                    continue
                 q+=(
-                    ".addV('entity')"
-                    ".property('id', prop_id"+str(iter_row)+")"
-                    ".property('name', prop_name"+str(iter_row)+")"
-                    ".property('type', prop_type"+str(iter_row)+")"
-                    ".property('description', prop_description"+str(iter_row)+")"
-                    ".property('human_readable_id', prop_human_readable_id"+str(iter_row)+")"
-                    ".property('category', 'entities')"
+                    ".V(prop_id"+str(iter_row)+").fold().coalesce("
+                    "   __.unfold(),"
+                    "   __.addV('entity')"
+                    "   .property('id', prop_id"+str(iter_row)+")"
+                    "   .property('name', prop_name"+str(iter_row)+")"
+                    "   .property('type', prop_type"+str(iter_row)+")"
+                    "   .property('description', prop_description"+str(iter_row)+")"
+                    "   .property('human_readable_id', prop_human_readable_id"+str(iter_row)+")"
+                    "   .property('category', 'entities')"
+                    ")"
                 )
                 query_bindings.update({
                     ("prop_id"+str(iter_row)): row.id,
@@ -119,17 +120,18 @@ class GraphDBClient:
                 bindings=query_bindings
             )
 
-
     def write_edges(self,data: pd.DataFrame)->None:
         step_df=100
         split_dataframes=[data[i:i+step_df] for i in range(0,len(data),step_df)]
+        added_relationships=set([])
         for spilt_df in split_dataframes:
             q="g"
             query_bindings={}
             iter_row=0
             for row in spilt_df.itertuples():
-                if self.element_exists("g.E()",row.id):
+                if row.id in added_relationships:
                     continue
+                added_relationships.add(row.id)
                 q+=(
                     ".V().has('name',prop_source_id"+str(iter_row)+")"
                     ".addE('connects')"
@@ -141,8 +143,6 @@ class GraphDBClient:
                     ".property('source_degree',prop_source_degree"+str(iter_row)+")"
                     ".property('target_degree',prop_target_degree"+str(iter_row)+")"
                     ".property('rank',prop_rank"+str(iter_row)+")"
-                    ".property('source',prop_source"+str(iter_row)+")"
-                    ".property('target',prop_target"+str(iter_row)+")"
                     ".property(list,'text_unit_ids',prop_text_unit_ids"+str(iter_row)+")"
                 )
                 query_bindings.update({
@@ -155,8 +155,6 @@ class GraphDBClient:
                     ("prop_source_degree"+str(iter_row)): row.source_degree,
                     ("prop_target_degree"+str(iter_row)): row.target_degree,
                     ("prop_rank"+str(iter_row)): row.rank,
-                    ("prop_source"+str(iter_row)): row.source,
-                    ("prop_target"+str(iter_row)): row.target,
                     ("prop_text_unit_ids"+str(iter_row)):json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
                 })
                 iter_row+=1
@@ -164,3 +162,4 @@ class GraphDBClient:
                 message=q,
                 bindings=query_bindings
             )
+            time.sleep(2)
