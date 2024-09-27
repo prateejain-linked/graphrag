@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import pandas as pd
+from time import sleep
 
 from common.graph_db_client import GraphDBClient
 from graphrag.common.progress import ProgressReporter
@@ -99,10 +100,10 @@ class ContextSwitcher:
         settings_yaml = (
             Path(config)
             if config and Path(config).suffix in [".yaml", ".yml"]
-            else _root / "settings/settings.yaml"
+            else _root / "settings.yaml"
         )
         if not settings_yaml.exists():
-            settings_yaml = _root / "settings/settings.yml"
+            settings_yaml = _root / "settings.yml"
 
         if settings_yaml.exists():
             reporter.info(f"Reading settings from {settings_yaml}")
@@ -117,7 +118,7 @@ class ContextSwitcher:
         settings_json = (
             Path(config)
             if config and Path(config).suffix == ".json"
-            else _root / "settings/settings.json"
+            else _root / "settings.json"
         )
         if settings_json.exists():
             reporter.info(f"Reading settings from {settings_json}")
@@ -130,7 +131,7 @@ class ContextSwitcher:
         reporter.info("Reading settings from environment variables")
         return create_graphrag_config(root_dir=root)
 
-    def activate(self, files:[str]=[]):
+    def activate(self):
         """Activate the context."""
         #1. read the context id to fileId mapping.
         #2. read the file from storage using common/blob_storage_client.py
@@ -160,7 +161,7 @@ class ContextSwitcher:
                 msg = "Either data_dir or root_dir must be provided."
                 raise ValueError(msg)
             if data_dir is None:
-                data_dir = root_dir #_infer_data_dir(cast(str, root_dir))
+                data_dir = _infer_data_dir(cast(str, root_dir))
             config = _create_graphrag_config(root_dir, config_dir)
             return data_dir, root_dir, config
 
@@ -202,12 +203,7 @@ class ContextSwitcher:
             input_storage_client: PipelineStorage = FilePipelineStorage(config.root_dir)
 
         data_paths = []
-        if(len(files) > 0):
-            logging.info("Using files passed from query")
-            data_paths=files
-        else:
-            logging.info("reading files from settings files")
-            data_paths = get_files_by_contextid(config, context_id)
+        data_paths = get_files_by_contextid(config, context_id)
         final_nodes = pd.DataFrame()
         final_community_reports = pd.DataFrame()
         final_text_units = pd.DataFrame()
@@ -215,6 +211,10 @@ class ContextSwitcher:
         final_entities = pd.DataFrame()
         final_covariates = pd.DataFrame()
         graph_db_client=None
+
+        if len(data_paths) > 1:
+            raise ValueError("Place only one datapath in files. Will auto-itrate through internal folders.")
+        
 
         if config.graphdb.enabled:
             cosmos_client = CosmosClient(
@@ -227,15 +227,34 @@ class ContextSwitcher:
             graph = database.create_container_if_not_exists(
                 id=graph_name,
                 partition_key=PartitionKey(path='/category'),
-                offer_throughput=400
+                offer_throughput=4000
             )
             graph_db_client = GraphDBClient(config.graphdb,context_id)
 
-        description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
+        db_enabled=True #used to isolate cosmos db tests
+        if db_enabled:
+            description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
 
-        for data_path in data_paths:
+        i_count=len(os.listdir(data_paths[0]))
+        vector_store_args = (
+                config.embeddings.vector_store if config.embeddings.vector_store else {}
+        )
+
+        reporter.info(f"Vector Store Args: {vector_store_args}")
+
+        if "type" not in vector_store_args:
+            ValueError("vectore_store.type can't be empty")
+
+        vector_store_type = vector_store_args.get("type")
+
+        if vector_store_type != VectorStoreType.Kusto:
+            ValueError("Context switching is only supporeted for vectore_store.type=kusto ")
+
+        for p_id in range(i_count):
+            data_path=f"{data_paths[0]}\\{p_id}" #windows
+            #data_path=f"{data_paths[0]}/{p_id}" #linux
             #check from the config for the ouptut storage type and then read the data from the storage.
-
+            logging.info("Working with "+data_path)
             #GraphDB: we may need to make change below to read nodes data from Graph DB
             final_nodes = read_paraquet_file(input_storage_client, data_path + "/create_final_nodes.parquet")
             final_community_reports = read_paraquet_file(input_storage_client, data_path + "/create_final_community_reports.parquet") # KustoDB: Final_entities, Final_Nodes, Final_report should be merged and inserted to kusto
@@ -247,30 +266,22 @@ class ContextSwitcher:
             final_relationships = read_paraquet_file(input_storage_client, data_path + "/create_final_relationships.parquet")
             final_entities = read_paraquet_file(input_storage_client, data_path + "/create_final_entities.parquet")
 
-            vector_store_args = (
-                config.embeddings.vector_store if config.embeddings.vector_store else {}
-            )
-
-            reporter.info(f"Vector Store Args: {vector_store_args}")
-
-            if "type" not in vector_store_args:
-                ValueError("vectore_store.type can't be empty")
-
-            vector_store_type = vector_store_args.get("type")
-
-            if vector_store_type != VectorStoreType.Kusto:
-                ValueError("Context switching is only supporeted for vectore_store.type=kusto ")
+            if len(final_nodes)==0:
+                logging.info("Empty table. Skipping to next instance")
+                continue
 
             entities = read_indexer_entities(final_nodes, final_entities, community_level) # KustoDB: read Final nodes data and entities data and merge it.
             reports = read_indexer_reports(final_community_reports, final_nodes, community_level)
             text_units = read_indexer_text_units(final_text_units)
 
-            description_embedding_store.load_entities(entities)
-            if self.use_kusto_community_reports:
-                raise ValueError("Community reports not supported for kusto.")
-                #description_embedding_store.load_reports(reports)
+            if db_enabled:
+                logging.info(f"loading {len(entities)} entities in kusto")
+                description_embedding_store.load_entities(entities)
+                if self.use_kusto_community_reports:
+                    raise ValueError("Community reports not supported for kusto.")
+                    #description_embedding_store.load_reports(reports)
 
-            description_embedding_store.load_text_units(text_units)
+                description_embedding_store.load_text_units(text_units)
 
             if config.graphdb.enabled:
                 graph_db_client.write_vertices(final_entities)
@@ -278,6 +289,8 @@ class ContextSwitcher:
 
         if config.graphdb.enabled:
             graph_db_client._client.close()
+
+        logging.info("Operation completed. Loaded all instances.")
 
     def deactivate(self):
         """DeActivate the context."""
