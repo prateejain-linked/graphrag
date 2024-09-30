@@ -347,6 +347,21 @@ class KustoVectorStore(BaseVectorStore):
 
         return res
 
+    def setup_docs(self) -> None: #Called by indexer
+        command = f".drop table {self.docs_tbl_name} ifexists"
+        self.client.execute(self.database, command)
+        
+        command = f".create table {self.docs_tbl_name} (id: string, in_path:string, \
+            out_path: string)"
+
+        self.exe(command)
+
+    def load_doc_stats(self, rows) -> None: #called by indexer
+        df = pd.DataFrame(rows)
+        
+        ingestion_command = f".ingest inline into table {self.docs_tbl_name} <| {df.to_csv(index=False, header=False)}"
+        self.client.execute(self.database, ingestion_command)
+
     def get_extracted_reports(
         self, community_ids: list[int], **kwargs: Any
     ) -> list[CommunityReport]:
