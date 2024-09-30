@@ -255,11 +255,11 @@ def index_cli(
 
     ################ INDEXING ITERATION
     orig_storage_base=pipeline_config.storage.base_dir
-    orig_input_base="..\\..\\..\\tim_belden"
+    orig_input_base="< relative path >"
     #input_full_path = os.path.dirname(__file__) + '\\..\\.' + root + "\\" + pipeline_config.input.base_dir
     #input_full_path = "/home/site/wwwroot/data/email_store"
     #i_count=len(os.listdir(root+"\\input"))
-    input_full_path = "C:\\src\\upstream-exe\\tim_belden"
+    input_full_path = "< Absolute path >"
     folders=os.listdir(input_full_path)
     i_count=len(folders)
 
