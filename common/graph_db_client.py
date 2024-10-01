@@ -123,7 +123,6 @@ class GraphDBClient:
     def write_edges(self,data: pd.DataFrame)->None:
         step_df=100
         split_dataframes=[data[i:i+step_df] for i in range(0,len(data),step_df)]
-        added_relationships=set([])
         for spilt_df in split_dataframes:
             q="g"
             query_bindings={}
