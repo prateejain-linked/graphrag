@@ -52,6 +52,7 @@ from graphrag.vector_stores import BaseVectorStore
 from graphrag.vector_stores.kusto import KustoVectorStore
 from graphrag.index.verbs.entities.extraction.strategies.graph_intelligence.run_graph_intelligence import run_gi
 from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
+import os
 
 log = logging.getLogger(__name__)
 
@@ -157,8 +158,11 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
 
         preselected_entities, selected_entities, entity_to_related_entities = [], [], []
+        env = os.environ.get("ENVIRONMENT")
 
-        #path = 4 #1: base, 2,3: paths 4:graphdb simulation
+        path = 0 
+
+        graph_search_entities=[]
 
         if path in (2,3):
             args = {}
@@ -168,6 +172,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             args['api_base'] = self.config.llm.api_base
             args['api_version'] = self.config.llm.api_version
             args['deployment_name'] = self.config.llm.deployment_name
+            #we don't send the prompt so that the extractor uses the generic promp for query
             llm_conf = {}
             llm_conf['llm'] = args
 
@@ -181,22 +186,27 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             q_entities=q_entities.entities
 
+            '''
+            def entity_to_id(e):
+                h=hashlib.sha256()
+                h.update(e.encode())
+                return h.hexdigest()
+
+            preselected_entities=[entity_to_id(entity['name']) for entity in q_entities]
+            '''
+
             preselected_entities=[generate_entity_id(entity['name']) for entity in q_entities]
 
             names = [entity['name'] for entity in q_entities]
 
-            print("Entities: ", names)
+            graph_search_entities=preselected_entities
 
             if path == 3:
                 #graph search: get relationships
+                pass
 
-                graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
-                if graphdb_client:
-                    # Call graphdb making a list of dictionary of entity_id to related entities mapping
-                    entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships) for preselected_entity in preselected_entities}
-                    print("Related entities: ", entity_to_related_entities)
-                else:
-                    print("No graphdb, cannot add relationship context")
+
+                
 
 
         selected_entities = map_query_to_entities(
@@ -211,9 +221,47 @@ class LocalSearchMixedContext(LocalContextBuilder):
             oversample_scaler=2,
             preselected_entities=preselected_entities
         )
-
         print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
+        if path in (0,1):
+            for e in selected_entities:
+                graph_search_entities.append(e.id)
+
+        ################## Load  graph data
+
+
+        graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
+        if graphdb_client:
+                    # Call graphdb making a list of dictionary of entity_id to related entities mapping
+            entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(
+                                                    preselected_entity, top_k_relationships) 
+                                                    for preselected_entity in graph_search_entities
+                                                }
+            print("Related entities: ", entity_to_related_entities)
+            
+            # POST RETREIVAL RELATIONSHIP DATA TO PASS TO LLM
+            if env=='DEVELOPMENT':
+                #load relationships
+                r_id=1
+                relationships=[]
+
+                for group in entity_to_related_entities.values():
+                    for e in group:
+                        r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
+                                               target=e['target'],description=e['description']
+                                               ,attributes={'rank':e['rank']})
+                        r_id+=1
+                        relationships.append(r)
+
+                self.relationships = {
+                    relationship.id: relationship for relationship in relationships
+                }
+
+        else:
+            print("No graphdb, cannot add relationship context")
+        
+        ############################################
+        
 
         # build context
         final_context = list[str]()
@@ -277,7 +325,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             # build text unit context
             text_unit_tokens = max(int(max_tokens * text_unit_prop), 0)
 
-
+            
             if isinstance(self.entity_text_embeddings,KustoVectorStore):
                 text_unit_context, text_unit_context_data = self._build_text_unit_context_kusto(
                     selected_entities=selected_entities,
@@ -308,7 +356,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 entity_to_units[e.title]=[]
             entity_to_units[e.title].extend(text_units)
 
-
+        print("Doc stats per entity")
         for title in entity_to_units:
             for unit in entity_to_units[title]:
                 docs=self.text_units_kusto[unit]
@@ -420,13 +468,14 @@ class LocalSearchMixedContext(LocalContextBuilder):
         vector_store: BaseVectorStore = None,
         entity_to_related_entities: [dict[str, str]] = [],
     ) -> tuple[str, dict[str, pd.DataFrame]]:
-
+        
         selected_text_units=vector_store.retrieve_text_units(selected_entities)
 
         # if path 3, we have related text units to add to the context
         for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
             for related in related_groups:
-                selected_text_units += vector_store.retrieve_text_units_by_id(ast.literal_eval(related['text_unit_ids']))
+                unit_ids=ast.literal_eval(related['text_unit_ids'])
+                selected_text_units += vector_store.retrieve_text_units_by_id(unit_ids)
 
         hmap={}
         text_units_kusto={}
@@ -434,12 +483,12 @@ class LocalSearchMixedContext(LocalContextBuilder):
             if unit.id not in hmap:
                 hmap[unit.id]=unit
                 text_units_kusto[unit.id]=unit.document_ids
-
+        
         selected_text_units=[]
         for id in hmap:
             selected_text_units.append(hmap[id])
 
-
+            
         self.text_units_kusto=text_units_kusto
 
         #ignore sorting selected_text_usnits based on relationship count
@@ -461,9 +510,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
             loc = txt.find("\"body\"")
             if loc > -1:
                 unit.text = txt[loc+9:]
-
+            
             logging.info("Adding source: "+unit.text)
-
+            
 
         context_text, context_data = build_text_unit_context(
             text_units=selected_text_units,
