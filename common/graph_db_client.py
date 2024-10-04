@@ -88,7 +88,7 @@ class GraphDBClient:
         return element_count>0
 
     def write_vertices(self,data: pd.DataFrame)->None:
-        step_df=50
+        step_df=100
         split_dataframes=[data[i:i+step_df] for i in range(0,len(data),step_df)]
         for spilt_df in split_dataframes:
             q="g"
@@ -119,6 +119,7 @@ class GraphDBClient:
                 message=q,
                 bindings=query_bindings
             )
+            time.sleep(5)
 
     def write_edges(self,data: pd.DataFrame)->None:
         step_df=100
@@ -158,4 +159,4 @@ class GraphDBClient:
                 message=q,
                 bindings=query_bindings
             )
-            time.sleep(2)
+            time.sleep(10)
