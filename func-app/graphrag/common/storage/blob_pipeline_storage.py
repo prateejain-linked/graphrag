@@ -12,6 +12,7 @@ from typing import Any
 
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
+from azure.core.exceptions import ResourceNotFoundError
 from datashaper import Progress
 
 from graphrag.common.progress import ProgressReporter
@@ -190,7 +191,20 @@ class BlobPipelineStorage(PipelineStorage):
             return None
         else:
             return blob_data
-
+    
+    def check_if_exists(self, key: str) -> bool:
+        """Get a value from the cache."""
+        try:
+            key = self._keyname(key)
+            container_client = self._blob_service_client.get_container_client(
+                self._container_name
+            )
+            blob_client = container_client.get_blob_client(key)
+            blob_data = blob_client.download_blob()
+            return True
+        except ResourceNotFoundError:
+            return False
+        
     async def set(self, key: str, value: Any, encoding: str | None = None) -> None:
         """Set a value in the cache."""
         try:
