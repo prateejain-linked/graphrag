@@ -123,3 +123,7 @@ def indexing(req: func.HttpRequest) -> func.HttpResponse:
         "Wow this first HTTP Function works!!!!",
         status_code=200
     )
+
+def executing_correct_func_app(req: func.HttpRequest, route: str):
+    return os.getenv("ENVIRONMENT") == "AZURE" and  os.getenv("APP_NAME")!= route
+            
