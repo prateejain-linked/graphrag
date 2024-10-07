@@ -255,13 +255,14 @@ async def run_pipeline(
             log.exception("error loading table from storage: %s", name)
             raise
 
-    async def inject_workflow_data_dependencies(workflow: Workflow) -> None:
+    async def inject_workflow_data_dependencies(docId: str, workflow: Workflow) -> None:
         workflow.add_table(DEFAULT_INPUT_NAME, dataset)
         deps = workflow_dependencies[workflow.name]
         log.info("dependencies for %s: %s", workflow.name, deps)
         for id in deps:
             workflow_id = f"workflow:{id}"
-            table = await load_table_from_storage(f"{id}.parquet")
+            dep_file_name = f"{docId}/version=0/{id}"
+            table = await load_table_from_storage(f"{dep_file_name}.parquet")
             workflow.add_table(workflow_id, table)
 
     async def write_workflow_stats(
@@ -288,10 +289,10 @@ async def run_pipeline(
             "first row of %s => %s", workflow_name, workflow.output().iloc[0].to_json()
         )
 
-    async def emit_workflow_output(workflow: Workflow) -> pd.DataFrame:
+    async def emit_workflow_output(docId: str, workflow: Workflow, tags: dict[str, str] = None) -> pd.DataFrame:
         output = cast(pd.DataFrame, workflow.output())
         for emitter in emitters:
-            await emitter.emit(workflow.name, output)
+            await emitter.emit(docId, workflow.name, output, tags=tags)
         return output
 
     dataset = await _run_post_process_steps(
@@ -303,6 +304,9 @@ async def run_pipeline(
 
     log.info("Final # of rows loaded: %s", len(dataset))
     stats.num_documents = len(dataset)
+    docId = dataset['id'].iloc[0]
+    docTag = dataset['tag'].iloc[0]
+    tags = dict({'name' : docTag})
     last_workflow = "input"
 
     try:
@@ -325,14 +329,14 @@ async def run_pipeline(
                 continue
 
             stats.workflows[workflow_name] = {"overall": 0.0}
-            await inject_workflow_data_dependencies(workflow)
+            await inject_workflow_data_dependencies(docId, workflow)
 
             workflow_start_time = time.time()
             result = await workflow.run(context, callbacks)
             await write_workflow_stats(workflow, result, workflow_start_time)
 
             # Save the output from the workflow
-            output = await emit_workflow_output(workflow)
+            output = await emit_workflow_output(docId, workflow, tags=tags)
             yield PipelineRunResult(workflow_name, output, None)
             output = None
             workflow.dispose()
@@ -345,7 +349,8 @@ async def run_pipeline(
         cast(WorkflowCallbacks, callbacks).on_error(
             "Error running pipeline!", e, traceback.format_exc()
         )
-        yield PipelineRunResult(last_workflow, None, [e])
+        raise
+        #yield PipelineRunResult(last_workflow, None, [e])
 
 
 def _create_callback_chain(
