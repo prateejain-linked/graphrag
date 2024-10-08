@@ -18,6 +18,8 @@ from graphrag.common.progress import ProgressReporter
 
 from .typing import PipelineStorage
 
+from azure.core.exceptions import ResourceNotFoundError
+
 log = logging.getLogger(__name__)
 
 
@@ -191,7 +193,20 @@ class BlobPipelineStorage(PipelineStorage):
         else:
             return blob_data
 
-    async def set(self, key: str, value: Any, encoding: str | None = None) -> None:
+    def check_if_exists(self, key: str) -> bool:
+        """Get a value from the cache."""
+        try:
+            key = self._keyname(key)
+            container_client = self._blob_service_client.get_container_client(
+                self._container_name
+            )
+            blob_client = container_client.get_blob_client(key)
+            blob_data = blob_client.download_blob()
+            return True
+        except ResourceNotFoundError:
+            return False
+
+    async def set(self, key: str, value: Any, encoding: str | None = None, tags: dict[str, str] = None) -> None:
         """Set a value in the cache."""
         try:
             key = self._keyname(key)
@@ -202,10 +217,10 @@ class BlobPipelineStorage(PipelineStorage):
             if blob_client.exists() and not self._overwrite:
                 ValueError("Artifacts already exists, make sure output folder is empty.")
             if isinstance(value, bytes):
-                blob_client.upload_blob(value, overwrite=True)
+                blob_client.upload_blob(value, overwrite=True, metadata=tags)
             else:
                 coding = encoding or "utf-8"
-                blob_client.upload_blob(value.encode(coding), overwrite=True)
+                blob_client.upload_blob(value.encode(coding), overwrite=True, metadata=tags)
         except Exception:
             log.exception("Error setting key %s: %s", key)
 
