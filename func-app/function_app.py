@@ -39,64 +39,9 @@ def initialize_watermark_client() -> BlobPipelineStorage:
     return watermark_storage_account
     
 
-# @app.function_name('contextpoller')
-# @app.timer_trigger(schedule="0 */3 * * * *", arg_name="mytimer", run_on_startup=True) 
-# def indexing(mytimer: func.TimerRequest) -> None:
-#     logging.info('Python HTTP trigger function processed a request.')
-    
-#     input_base_dir=None
-#     # if "input_base_dir" in req.params:
-#     #     input_base_dir = req.params['input_base_dir']
-    
-#     output_base_dir=None
-#     # if "output_base_dir" in req.params:
-#     #     output_base_dir = req.params['output_base_dir']
-    
-#     queue_client = initialize_incoming_msg_queue()
-#     watermark_client = initialize_watermark_client()
-    
-#     targets = find_next_target_blob(queue_storage_client=queue_client, watermark_client=watermark_client)
-#     if len(targets) <= 0:
-#         logging.info("No target to index. Silently skipping the iteration")
-#         return
-    
-#     file_target = []
-#     for target in targets:
-#         file_target.append(target[0])
-    
-#     try:
-#         # index_cli(
-#         #     root = "settings",
-#         #     verbose=False,
-#         #     resume=False,
-#         #     memprofile=False,
-#         #     nocache=False,
-#         #     config=None,
-#         #     emit=None,
-#         #     dryrun=False,
-#         #     init=False,
-#         #     overlay_defaults=False,
-#         #     cli=True,
-#         #     context_id=None,
-#         #     context_operation=None,
-#         #     community_level=2,
-#         #     use_kusto_community_reports=None,
-#         #     optimized_search=None,
-#         #     input_base_dir=input_base_dir,
-#         #     output_base_dir=output_base_dir,
-#         #     files=file_target
-#         # )
-#         logging.info("Successfully processed the message from the queue")
-
-#         water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
-        
-#     except:
-#         logging.error("Error executing the function")
-#         raise
-
-@app.function_name('contextpollv2')
-@app.route(route="contextpoll", auth_level=func.AuthLevel.FUNCTION) 
-def context_poll(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name('contextpoller')
+@app.timer_trigger(schedule="0 */3 * * * *", arg_name="mytimer", run_on_startup=True) 
+def indexing(mytimer: func.TimerRequest) -> None:
     logging.info('Python HTTP trigger function processed a request.')
     
     input_base_dir=None
@@ -104,8 +49,8 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
     #     input_base_dir = req.params['input_base_dir']
     
     output_base_dir=None
-    # if "output_base_dir" in req.params:
-    #     output_base_dir = req.params['output_base_dir']
+    if "output_base_dir" in req.params:
+        output_base_dir = req.params['output_base_dir']
     
     queue_client = initialize_incoming_msg_queue()
     watermark_client = initialize_watermark_client()
@@ -151,16 +96,77 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
             logging.info("Successfully processed the message from the queue")
 
             water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
-            return func.HttpResponse(
-                "Successfully processed the create / initialized request",
-                status_code=200
-            )
-        except Exception as ex:
-            logging.error(ex)
-            return func.HttpResponse(
-                "The request failed to be processed",
-                status_code=500
-            )
+        except:
+            logging.error("Error executing the function")
+            raise
+
+# @app.function_name('contextpollv2')
+# @app.route(route="contextpoll", auth_level=func.AuthLevel.FUNCTION) 
+# def context_poll(req: func.HttpRequest) -> func.HttpResponse:
+#     logging.info('Python HTTP trigger function processed a request.')
+    
+#     input_base_dir=None
+#     # if "input_base_dir" in req.params:
+#     #     input_base_dir = req.params['input_base_dir']
+    
+#     output_base_dir=None
+#     # if "output_base_dir" in req.params:
+#     #     output_base_dir = req.params['output_base_dir']
+    
+#     queue_client = initialize_incoming_msg_queue()
+#     watermark_client = initialize_watermark_client()
+    
+#     targets = find_next_target_index_blob(queue_storage_client=queue_client, watermark_client=watermark_client, caller='context')
+#     if len(targets) <= 0:
+#         logging.info("No target to index. Silently skipping the iteration")
+#         return func.HttpResponse(
+#             "No content to polled for the context",
+#             status_code=200
+#         )
+    
+#     file_targets: list[str] = []
+#     for target in targets:
+#         file_targets.append(target[0])
+    
+#     for file_target in file_targets:
+#         #input for the artifcact storage account
+#         # context switching for all the target blobs.
+#         context_id = file_target.split("/")[0]
+#         try:
+#             index_cli(
+#                 root = "settings",
+#                 verbose=False,
+#                 resume=False,
+#                 memprofile=False,
+#                 nocache=False,
+#                 config=None,
+#                 emit=None,
+#                 dryrun=False,
+#                 init=False,
+#                 overlay_defaults=False,
+#                 cli=True,
+#                 context_id=context_id,
+#                 context_operation='activate',
+#                 community_level=2,
+#                 use_kusto_community_reports=None,
+#                 optimized_search=None,
+#                 input_base_dir=input_base_dir,
+#                 output_base_dir=output_base_dir,
+#                 files=[file_target]
+#             )
+#             logging.info("Successfully processed the message from the queue")
+
+#             water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
+#             return func.HttpResponse(
+#                 "Successfully processed the create / initialized request",
+#                 status_code=200
+#             )
+#         except Exception as ex:
+#             logging.error(ex)
+#             return func.HttpResponse(
+#                 "The request failed to be processed",
+#                 status_code=500
+#             )
 
 @app.function_name('contextmanager')
 @app.route(route="context", auth_level=func.AuthLevel.FUNCTION)
