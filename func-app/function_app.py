@@ -118,7 +118,7 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
             status_code=200
         )
     
-    file_targets = []
+    file_targets: list[str] = []
     for target in targets:
         file_targets.append(target[0])
     
@@ -146,7 +146,7 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
                 optimized_search=None,
                 input_base_dir=input_base_dir,
                 output_base_dir=output_base_dir,
-                files=file_target
+                files=[file_target]
             )
             logging.info("Successfully processed the message from the queue")
 
