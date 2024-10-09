@@ -100,73 +100,73 @@ def indexing(mytimer: func.TimerRequest) -> None:
             logging.error("Error executing the function")
             raise
 
-# @app.function_name('contextpollv2')
-# @app.route(route="contextpoll", auth_level=func.AuthLevel.FUNCTION) 
-# def context_poll(req: func.HttpRequest) -> func.HttpResponse:
-#     logging.info('Python HTTP trigger function processed a request.')
+@app.function_name('contextpollv2')
+@app.route(route="contextpoll", auth_level=func.AuthLevel.FUNCTION) 
+def context_poll(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request.')
     
-#     input_base_dir=None
-#     # if "input_base_dir" in req.params:
-#     #     input_base_dir = req.params['input_base_dir']
+    input_base_dir=None
+    # if "input_base_dir" in req.params:
+    #     input_base_dir = req.params['input_base_dir']
     
-#     output_base_dir=None
-#     # if "output_base_dir" in req.params:
-#     #     output_base_dir = req.params['output_base_dir']
+    output_base_dir=None
+    # if "output_base_dir" in req.params:
+    #     output_base_dir = req.params['output_base_dir']
     
-#     queue_client = initialize_incoming_msg_queue()
-#     watermark_client = initialize_watermark_client()
+    queue_client = initialize_incoming_msg_queue()
+    watermark_client = initialize_watermark_client()
     
-#     targets = find_next_target_index_blob(queue_storage_client=queue_client, watermark_client=watermark_client, caller='context')
-#     if len(targets) <= 0:
-#         logging.info("No target to index. Silently skipping the iteration")
-#         return func.HttpResponse(
-#             "No content to polled for the context",
-#             status_code=200
-#         )
+    targets = find_next_target_index_blob(queue_storage_client=queue_client, watermark_client=watermark_client, caller='context')
+    if len(targets) <= 0:
+        logging.info("No target to index. Silently skipping the iteration")
+        return func.HttpResponse(
+            "No content to polled for the context",
+            status_code=200
+        )
     
-#     file_targets: list[str] = []
-#     for target in targets:
-#         file_targets.append(target[0])
+    file_targets: list[str] = []
+    for target in targets:
+        file_targets.append(target[0])
     
-#     for file_target in file_targets:
-#         #input for the artifcact storage account
-#         # context switching for all the target blobs.
-#         context_id = file_target.split("/")[0]
-#         try:
-#             index_cli(
-#                 root = "settings",
-#                 verbose=False,
-#                 resume=False,
-#                 memprofile=False,
-#                 nocache=False,
-#                 config=None,
-#                 emit=None,
-#                 dryrun=False,
-#                 init=False,
-#                 overlay_defaults=False,
-#                 cli=True,
-#                 context_id=context_id,
-#                 context_operation='activate',
-#                 community_level=2,
-#                 use_kusto_community_reports=None,
-#                 optimized_search=None,
-#                 input_base_dir=input_base_dir,
-#                 output_base_dir=output_base_dir,
-#                 files=[file_target]
-#             )
-#             logging.info("Successfully processed the message from the queue")
+    for file_target in file_targets:
+        #input for the artifcact storage account
+        # context switching for all the target blobs.
+        context_id = file_target.split("/")[0]
+        try:
+            index_cli(
+                root = "settings",
+                verbose=False,
+                resume=False,
+                memprofile=False,
+                nocache=False,
+                config=None,
+                emit=None,
+                dryrun=False,
+                init=False,
+                overlay_defaults=False,
+                cli=True,
+                context_id=context_id,
+                context_operation='activate',
+                community_level=2,
+                use_kusto_community_reports=None,
+                optimized_search=None,
+                input_base_dir=input_base_dir,
+                output_base_dir=output_base_dir,
+                files=[file_target]
+            )
+            logging.info("Successfully processed the message from the queue")
 
-#             water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
-#             return func.HttpResponse(
-#                 "Successfully processed the create / initialized request",
-#                 status_code=200
-#             )
-#         except Exception as ex:
-#             logging.error(ex)
-#             return func.HttpResponse(
-#                 "The request failed to be processed",
-#                 status_code=500
-#             )
+            water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
+            return func.HttpResponse(
+                "Successfully processed the create / initialized request",
+                status_code=200
+            )
+        except Exception as ex:
+            logging.error(ex)
+            return func.HttpResponse(
+                "The request failed to be processed",
+                status_code=500
+            )
 
 @app.function_name('contextmanager')
 @app.route(route="context", auth_level=func.AuthLevel.FUNCTION)

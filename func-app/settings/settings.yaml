@@ -54,11 +54,11 @@ embeddings:
     # target: required # or optional
 
 graphdb:
-  enabled: false
-  account_name: "graphdbhotstoreindex"
-  gremlin_url: "wss://graphdbhotstoreindex.gremlin.cosmos.azure.com:443/"
-  cosmos_url: "https://graphdbhotstoreindex.documents.azure.com:443/"
-  username: "/dbs/hotstoregraphdb/colls/graphentities"
+  enabled: true
+  account_name: "graphdbhotstoreindexv2"
+  gremlin_url: "wss://graphdbhotstoreindexv2.gremlin.cosmos.azure.com:443/"
+  cosmos_url: "https://graphdbhotstoreindexv2.documents.azure.com:443/"
+  username: "/dbs/entitygraph/colls/graphentities"
   account_key: ${COSMOS_ACCOUNT_KEY}
 chunks:
   size: 500
