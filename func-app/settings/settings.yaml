@@ -58,7 +58,7 @@ graphdb:
   account_name: "graphdbhotstoreindex"
   gremlin_url: "wss://graphdbhotstoreindex.gremlin.cosmos.azure.com:443/"
   cosmos_url: "https://graphdbhotstoreindex.documents.azure.com:443/"
-  username: "/dbs/graphdbhotstoreindex/colls/graphdb"
+  username: "/dbs/hotstoregraphdb/colls/graphentities"
   account_key: ${COSMOS_ACCOUNT_KEY}
 chunks:
   size: 500

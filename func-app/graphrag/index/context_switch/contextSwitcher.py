@@ -130,7 +130,7 @@ class ContextSwitcher:
         reporter.info("Reading settings from environment variables")
         return create_graphrag_config(root_dir=root)
 
-    def activate(self, files:[str]=[]):
+    def activate(self, files:list[str]=[]):
         """Activate the context."""
         #1. read the context id to fileId mapping.
         #2. read the file from storage using common/blob_storage_client.py
@@ -201,7 +201,7 @@ class ContextSwitcher:
         if(config.storage.type == StorageType.file):
             input_storage_client: PipelineStorage = FilePipelineStorage(config.root_dir)
 
-        data_paths = []
+        data_paths : list[str] = []
         if(len(files) > 0):
             logging.info("Using files passed from query")
             data_paths=files
@@ -235,18 +235,21 @@ class ContextSwitcher:
 
         added_vertices = set()
         for data_path in data_paths:
+            path_prefix = data_path
+            if len(config.storage.base_dir) > 0:
+                path_prefix = f"{config.storage.base_dir}/{data_path}"
             #check from the config for the ouptut storage type and then read the data from the storage.
 
             #GraphDB: we may need to make change below to read nodes data from Graph DB
-            final_nodes = read_paraquet_file(input_storage_client, data_path + "/create_final_nodes.parquet")
-            final_community_reports = read_paraquet_file(input_storage_client, data_path + "/create_final_community_reports.parquet") # KustoDB: Final_entities, Final_Nodes, Final_report should be merged and inserted to kusto
-            final_text_units = read_paraquet_file(input_storage_client, data_path + "/create_final_text_units.parquet") # lance db search need it for embedding mapping. we have embeddings in entities we should use from there. KustoDB already must have sorted it.
+            final_nodes = read_paraquet_file(input_storage_client, path_prefix + "/create_final_nodes.parquet")
+            final_community_reports = read_paraquet_file(input_storage_client, path_prefix + "/create_final_community_reports.parquet") # KustoDB: Final_entities, Final_Nodes, Final_report should be merged and inserted to kusto
+            final_text_units = read_paraquet_file(input_storage_client, path_prefix + "/create_final_text_units.parquet") # lance db search need it for embedding mapping. we have embeddings in entities we should use from there. KustoDB already must have sorted it.
 
             if not optimized_search:
-                final_covariates = read_paraquet_file(input_storage_client, data_path + "/create_final_covariates.parquet")
+                final_covariates = read_paraquet_file(input_storage_client, path_prefix + "/create_final_covariates.parquet")
 
-            final_relationships = read_paraquet_file(input_storage_client, data_path + "/create_final_relationships.parquet")
-            final_entities = read_paraquet_file(input_storage_client, data_path + "/create_final_entities.parquet")
+            final_relationships = read_paraquet_file(input_storage_client, path_prefix + "/create_final_relationships.parquet")
+            final_entities = read_paraquet_file(input_storage_client, path_prefix + "/create_final_entities.parquet")
 
             vector_store_args = (
                 config.embeddings.vector_store if config.embeddings.vector_store else {}
