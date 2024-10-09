@@ -5,6 +5,7 @@
 
 import logging
 from enum import Enum
+from random import Random
 from typing import Any, cast
 
 import networkx as nx
@@ -15,7 +16,7 @@ from graphrag.index.utils import gen_uuid, load_graph
 
 from .typing import Communities
 from hashlib import sha256
-import random
+import random 
 import time
 
 log = logging.getLogger(__name__)
@@ -123,7 +124,7 @@ def apply_clustering(
 
     # True: Same (source,target) will be handled as a new edge in graph when 
     # working with multiple index results.
-    UNIQUE_EDGES= True
+    UNIQUE_EDGES= True 
 
     graph = nx.parse_graphml(graphml)
     for community_level, community_id, nodes in communities:
