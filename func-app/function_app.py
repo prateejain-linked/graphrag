@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from graphrag.index.cli import index_cli
-from graphrag.query.cli import run_local_search
+from graphrag.query.cli import run_local_search, summarize
 
 app = func.FunctionApp()
 # Create a handler that writes log messages to stdout
@@ -135,6 +135,16 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
 
     return func.HttpResponse(
         "Query completed: "+ output,
+        status_code=200
+    )
+
+@app.function_name('summarization')
+@app.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
+def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
+    query_id = req.params['query']
+    output = summarize(query_id)
+    return func.HttpResponse(
+        "SUMMARIZED "+str(output),
         status_code=200
     )
 

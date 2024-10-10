@@ -3,7 +3,10 @@
 
 """Command line interface for the query module."""
 
+import ast
 import asyncio
+import json
+import logging
 import os
 from pathlib import Path
 from typing import cast
@@ -294,6 +297,26 @@ def run_local_search(
     reporter.success(f"Local Search Response: {result.response}")
     return result.response
 
+def summarize(query_id:str)->str:
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, "settings", None
+    )
+    output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.storage.connection_string,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
+    list_json=json.loads(blob_data)
+    total_text_units=set()
+    concat_result=""
+    for dict_json in list_json:
+        list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
+        for text_unit in list_text_units:
+            total_text_units.add(text_unit)
+    text_df=read_paraquet_file(output_storage_client,"output/20241009-125702/artifacts/create_base_text_units.parquet")
+    for text_unit in total_text_units:
+        concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'][0]
+    return concat_result
+
 def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFrame:
     if path == 1:
         return result.context_data["sources"]
@@ -308,13 +331,14 @@ def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFr
             entities = entities.drop(["description"], axis=1)
         if "description" in relationships.columns:
             relationships = relationships.drop(["description"], axis=1)
-    source_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='source', how='left', suffixes=('', '_source'))
-    target_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='target', how='left', suffixes=('', '_target'))
-    combined_df = pd.concat([source_merged, target_merged], ignore_index=True)
-    grouped_relationships = combined_df.groupby('entity_id').apply(
-        lambda x: x[['id', 'source', 'target', 'in_context', 'weight']].dropna().to_dict('records')
-    ).reset_index(name='relationships')
-    result_df = pd.merge(entities, grouped_relationships, on='entity_id', how='left')
+    #source_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='source', how='left', suffixes=('', '_source'))
+    #target_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='target', how='left', suffixes=('', '_target'))
+    #combined_df = pd.concat([source_merged, target_merged], ignore_index=True)
+    #grouped_relationships = combined_df.groupby('entity_id').apply(
+        #lambda x: x[['id', 'source', 'target', 'in_context', 'weight']].dropna().to_dict('records')
+    #).reset_index(name='relationships')
+    #result_df = pd.merge(entities, grouped_relationships, on='entity_id', how='left')
+    result_df = entities
     result_df = result_df.rename(columns={'entity_id': 'id'})
     return result_df
 
