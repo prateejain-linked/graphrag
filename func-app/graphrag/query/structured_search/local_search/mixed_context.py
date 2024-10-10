@@ -287,8 +287,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 #create one default relationship to be handled in build_relationship_context
                 rel_list=[]
 
-                rel_list.append(Relationship("00000","1","John Lavorato","TIM BELDEN",description="John Lavorato " 
-                                            "warned Tim that he will be stoppped"))
+                
                 relationships=rel_list
                 self.relationships = {
                 relationship.id: relationship for relationship in relationships
