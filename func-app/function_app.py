@@ -3,12 +3,16 @@ import logging
 import os
 import sys
 from graphrag.index.cli import index_cli
+<<<<<<< HEAD
 from graphrag.common.storage.queue_storage import QueueStorageClient
 from graphrag.common.storage.blob_pipeline_storage import BlobPipelineStorage
 from graphrag.query.cli import run_local_search
 from utility import find_next_target_index_blob
 from utility import water_mark_target
 from graphrag.index.context_switch.context_manager import ContextManager
+=======
+from graphrag.query.cli import run_local_search, summarize
+>>>>>>> Concatenating entities text units
 
 app = func.FunctionApp()
 # Create a handler that writes log messages to stdout
@@ -253,6 +257,17 @@ def indexing(req: func.HttpRequest) -> func.HttpResponse:
         "Wow this first HTTP Function works!!!!",
         status_code=200
     )
+
+@app.function_name('summarization')
+@app.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
+def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
+    query_id = req.params['query']
+    output = summarize(query_id)
+    return func.HttpResponse(
+        "SUMMARIZED "+str(output),
+        status_code=200
+    )
+
 
 def executing_correct_func_app(req: func.HttpRequest, route: str):
     return os.getenv("ENVIRONMENT") == "AZURE" and  os.getenv("APP_NAME")!= route
