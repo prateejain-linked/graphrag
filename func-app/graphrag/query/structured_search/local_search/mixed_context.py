@@ -176,8 +176,14 @@ class LocalSearchMixedContext(LocalContextBuilder):
             llm_conf = {}
             llm_conf['llm'] = args
 
+            single_try=True
+
+            if single_try:
+                # It is possible to miss some entities but unlikely since the input string is short
+                llm_conf['max_gleanings'] = 0 # No continuation commands
+
             q_entities = asyncio.run(run_gi(
-                docs=[Document(text=query, id='0')],
+                docs=[Document(text=query, id='0'],
                 entity_types=self.config.entity_extraction.entity_types,
                 reporter = None,
                 pipeline_cache=None,
@@ -185,6 +191,18 @@ class LocalSearchMixedContext(LocalContextBuilder):
             ))
 
             q_entities=q_entities.entities
+
+            if not single_try:
+                # remove potential extra entities
+                # in case of slightly different wording in returned entities, this will
+                # remove useful items.
+                tmp=[]
+                lq=query.lower()
+                for e in q_entities:
+                    if e['name'].lower() not in lq:
+                        continue
+                    tmp.append(e)
+                q_entities=tmp
 
             '''
             def entity_to_id(e):
