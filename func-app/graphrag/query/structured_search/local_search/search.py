@@ -110,6 +110,7 @@ class LocalSearch(BaseSearch):
         self,
         query: str,
         conversation_history: ConversationHistory | None = None,
+        path=0,
         **kwargs,
     ) -> SearchResult:
         """Build local search context that fits a single context window and generate answer for the user question."""
@@ -119,6 +120,7 @@ class LocalSearch(BaseSearch):
         context_text, context_records = self.context_builder.build_context(
             query=query,
             conversation_history=conversation_history,
+            path=path,
             **kwargs,
             **self.context_builder_params,
         )
