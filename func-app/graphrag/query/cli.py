@@ -154,7 +154,7 @@ def run_global_search(
     reporter.success(f"Global Search Response: {result.response}")
     return result.response
 
-def path0(
+def cs_search(
     config_dir: str | None,
     data_dir: str | None,
     root_dir: str | None,
@@ -164,6 +164,7 @@ def path0(
     query: str,
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
+    path=0
     ):
 
     """Run a local search with the given query."""
@@ -285,7 +286,7 @@ def path0(
     if optimized_search:
         result = search_engine.optimized_search(query=query)
     else:
-        result = search_engine.search(query=query)
+        result = search_engine.search(query=query,path=path)
     #for key in  result.context_data.keys():
         #asyncio.run(output_storage_client.set("query/output/"+ key +".paraquet", result.context_data[key].to_parquet())) #it shows as error in editor but not an error.
     reporter.success(f"Local Search Response: {result.response}")
@@ -374,15 +375,11 @@ def run_local_search(
     query: str,
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
-    paths: int = 0,):
+    path = 0,):
     """Run a local search with the given query."""
-    if(paths==1):
-        return path1(config_dir, data_dir, root_dir, community_level, response_type, context_id, query, optimized_search, use_kusto_community_reports)
-    elif(paths==2):
-        return path2(config_dir, data_dir, root_dir, community_level, response_type, context_id, query, optimized_search, use_kusto_community_reports)
-    elif(paths==3):
-        return path3(config_dir, data_dir, root_dir, community_level, response_type, context_id, query, optimized_search, use_kusto_community_reports)
-    return path0(config_dir, data_dir, root_dir, community_level, response_type, context_id, query, optimized_search, use_kusto_community_reports)
+    
+    return cs_search(config_dir, data_dir, root_dir, community_level, response_type, context_id, 
+                     query, optimized_search, use_kusto_community_reports, path=path)
 
 def blob_exists(container_client, blob_name):
     blob_client = container_client.get_blob_client(blob_name)

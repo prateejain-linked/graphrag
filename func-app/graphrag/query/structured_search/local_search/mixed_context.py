@@ -14,6 +14,7 @@ from graphrag.config.models.graph_rag_config import GraphRagConfig
 import tiktoken
 from graphrag.index.verbs.entities.extraction.strategies.typing import Document
 import hashlib
+from random import randint
 from graphrag.model import (
     CommunityReport,
     Covariate,
@@ -160,10 +161,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
         preselected_entities, selected_entities, entity_to_related_entities = [], [], []
         env = os.environ.get("ENVIRONMENT")
 
-        path = 0
+        
 
-        graph_search_entities=[]
-
+        # ENTITY ISOLATION
         if path in (2,3):
             args = {}
             args['type'] = self.config.llm.type
@@ -171,7 +171,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             args['model_supports_json'] = self.config.llm.model_supports_json
             args['api_base'] = self.config.llm.api_base
             args['api_version'] = self.config.llm.api_version
-            args['deployment_name'] = self.config.llm.deployment_name
+            args['deployment_name'] = self.config.llm.deployment_name          
             #we don't send the prompt so that the extractor uses the generic promp for query
             llm_conf = {}
             llm_conf['llm'] = args
@@ -183,7 +183,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 llm_conf['max_gleanings'] = 0 # No continuation commands
 
             q_entities = asyncio.run(run_gi(
-                docs=[Document(text=query, id='0'],
+                docs=[Document(text=query, id=str(randint(1,1000)))],
                 entity_types=self.config.entity_extraction.entity_types,
                 reporter = None,
                 pipeline_cache=None,
@@ -215,20 +215,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             preselected_entities=[generate_entity_id(entity['name']) for entity in q_entities]
 
-            graph_search_entities=preselected_entities
-
-            if path == 3:
-                #graph search: get relationships
-                rel_list=[]
-
-                relationships=rel_list
-                self.relationships = {
-                relationship.id: relationship for relationship in relationships
-                }
-
-
-                
-
+        
+        
 
         selected_entities = map_query_to_entities(
             query=query,
@@ -244,9 +232,13 @@ class LocalSearchMixedContext(LocalContextBuilder):
         )
         print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
-        if path in (0,1):
-            for e in selected_entities:
-                graph_search_entities.append(e.id)
+
+        if selected_entities==[]:
+            print("Search returned empty set. Check your query/path")
+            exit(-1)
+
+
+        
 
         ################## Load  graph data
 
@@ -255,8 +247,15 @@ class LocalSearchMixedContext(LocalContextBuilder):
         else:
             graphdb_client=None
 
-        if graphdb_client:
-                    # Call graphdb making a list of dictionary of entity_id to related entities mapping
+
+        graph_search_entities=[]
+
+        if graphdb_client and path in (0,3):
+            # Define entities
+            for e in selected_entities:
+                graph_search_entities.append(e.id)
+
+            # Get related entities
             entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(
                                                     preselected_entity, top_k_relationships) 
                                                     for preselected_entity in graph_search_entities
@@ -264,6 +263,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             print("Related entities: ", entity_to_related_entities)
             
             # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
+            # THIS PART REPLACES graphdb operation in get_[in/out]network_relationship
             if env=='DEVELOPMENT':
                 #load relationships
                 r_id=1
@@ -281,13 +281,25 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     relationship.id: relationship for relationship in relationships
                 }
 
+
+            if self.relationships=={}:
+                #create one default relationship to be handled in build_relationship_context
+                rel_list=[]
+
+                rel_list.append(Relationship("00000","1","John Lavorato","TIM BELDEN",description="John Lavorato " 
+                                            "warned Tim that he will be stoppped"))
+                relationships=rel_list
+                self.relationships = {
+                relationship.id: relationship for relationship in relationships
+                }
+
         else:
             print("No graphdb, cannot add relationship context")
         
         ############################################
 
         
-       
+        
 
         # build context
         final_context = list[str]()
@@ -391,14 +403,30 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
 
         raw_stats=''
-        
+        for title in entity_to_units:
+            units=entity_to_units[title]
+            for unit in units:
+                docs=self.text_units_kusto[unit]
+                ## Documents IDs per TextUnit per Entity:
+                line=f"> {title}: {unit}: {docs}"
+                print(line)
+                raw_stats+=str(line) + "\n"
 
         final_context_data['raw']=raw_stats
 
         target_textunits=[' ']
 
+        uc=0
+        for u in target_textunits:
+            if u in self.text_units_kusto:
+                uc+=1
         
-        final_context_data['suc']=( "" )
+        local_suc = uc/len(self.text_units_kusto)
+        ref_suc=uc/len(target_textunits)
+
+        final_context_data['suc']=( f"\n\tQuery local success rate: {local_suc*100}%"
+                                    f"\n\tQuery reference success rate: {ref_suc*100}%"
+                                    )
         return ("\n\n".join(final_context), final_context_data)
 
     def _build_community_context(
@@ -556,7 +584,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 return
             setattr(unit,column,ast.literal_eval(cvar))
 
-        
+
 
         for unit in selected_text_units:
             str_to_list(unit,'entity_ids')
@@ -572,6 +600,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             
             print("Adding source: "+unit.text)
+            if 'margin' in unit.text:
+                print("Got relevance\n",unit.text)
             
 
         context_text, context_data = build_text_unit_context(
