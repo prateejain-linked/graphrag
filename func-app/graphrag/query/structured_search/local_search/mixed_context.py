@@ -186,7 +186,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 llm_conf['max_gleanings'] = 0 # No continuation commands
 
             q_entities = asyncio.run(run_gi(
-                docs=[Document(text=query, id=str(randint(1,1000)))],
+                docs=[Document(text=query, id='0')],
                 entity_types=self.config.entity_extraction.entity_types,
                 reporter = None,
                 pipeline_cache=None,
