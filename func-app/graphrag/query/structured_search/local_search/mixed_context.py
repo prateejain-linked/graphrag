@@ -197,7 +197,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships) for preselected_entity in preselected_entities}
                     print("Related entities: ", entity_to_related_entities)
                     preselected_entities = [v["entity_id"] for related_entities in entity_to_related_entities.values() for v in related_entities]
-                    entity_to_related_entities = {}
                 else:
                     print("No graphdb, cannot add relationship context")
 
