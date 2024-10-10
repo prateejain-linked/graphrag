@@ -156,7 +156,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             query = f"{query}\n{pre_user_questions}"
 
 
-        preselected_entities, selected_entities, entity_to_related_entities = [], [], []
+        preselected_entities, selected_entities, entity_to_related_entities = [], [], {}
 
         #path = 4 #1: base, 2,3: paths 4:graphdb simulation
 
@@ -170,6 +170,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             args['deployment_name'] = self.config.llm.deployment_name
             llm_conf = {}
             llm_conf['llm'] = args
+            llm_conf['max_gleanings'] = 0
 
             q_entities = asyncio.run(run_gi(
                 docs=[Document(text=query, id='0')],
@@ -195,6 +196,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     # Call graphdb making a list of dictionary of entity_id to related entities mapping
                     entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships) for preselected_entity in preselected_entities}
                     print("Related entities: ", entity_to_related_entities)
+                    preselected_entities = [v["entity_id"] for related_entities in entity_to_related_entities.values() for v in related_entities]
+                    entity_to_related_entities = {}
                 else:
                     print("No graphdb, cannot add relationship context")
 
