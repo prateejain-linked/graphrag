@@ -3,16 +3,12 @@ import logging
 import os
 import sys
 from graphrag.index.cli import index_cli
-<<<<<<< HEAD
 from graphrag.common.storage.queue_storage import QueueStorageClient
 from graphrag.common.storage.blob_pipeline_storage import BlobPipelineStorage
-from graphrag.query.cli import run_local_search
+from graphrag.query.cli import run_local_search, summarize
 from utility import find_next_target_index_blob
 from utility import water_mark_target
 from graphrag.index.context_switch.context_manager import ContextManager
-=======
-from graphrag.query.cli import run_local_search, summarize
->>>>>>> Concatenating entities text units
 
 app = func.FunctionApp()
 # Create a handler that writes log messages to stdout
@@ -43,8 +39,8 @@ def initialize_watermark_client() -> BlobPipelineStorage:
     return watermark_storage_account
     
 
-@app.function_name('contextpoller')
-@app.timer_trigger(schedule="0 */3 * * * *", arg_name="mytimer", run_on_startup=True) 
+@app.function_name('csindexer')
+@app.timer_trigger(schedule="0 */5 * * * *", arg_name="mytimer", run_on_startup=True) 
 def indexing(mytimer: func.TimerRequest) -> None:
     logging.info('Python HTTP trigger function processed a request.')
     
