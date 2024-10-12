@@ -6,7 +6,6 @@
 import ast
 import asyncio
 import json
-import logging
 import os
 from pathlib import Path
 from typing import cast
@@ -38,7 +37,7 @@ from graphrag.vector_stores import VectorStoreFactory, VectorStoreType
 from graphrag.vector_stores.base import BaseVectorStore
 from graphrag.vector_stores.lancedb import LanceDBVectorStore
 from graphrag.vector_stores.kusto import KustoVectorStore
-from .factories import get_global_search_engine, get_local_search_engine
+from .factories import get_global_search_engine, get_local_search_engine, get_summarizer
 from .indexer_adapters import (
     read_indexer_covariates,
     read_indexer_entities,
@@ -297,7 +296,7 @@ def run_local_search(
     reporter.success(f"Local Search Response: {result.response}")
     return result.response
 
-def summarize(query_id:str)->str:
+def summarize(query_id:str,artifacts_path:str)->str:
     data_dir, root_dir, config = _configure_paths_and_settings(
         None, "settings", None
     )
@@ -312,10 +311,11 @@ def summarize(query_id:str)->str:
         list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
         for text_unit in list_text_units:
             total_text_units.add(text_unit)
-    text_df=read_paraquet_file(output_storage_client,"output/20241009-125702/artifacts/create_base_text_units.parquet")
+    text_df=read_paraquet_file(output_storage_client,f"{artifacts_path}/create_base_text_units.parquet")
     for text_unit in total_text_units:
         concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'][0]
-    return concat_result
+    summarizer = get_summarizer(config)
+    return summarizer.summarize(concat_result)
 
 def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFrame:
     if path == 1:
@@ -323,6 +323,7 @@ def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFr
     
     entities = result.context_data["entities"]
     relationships = result.context_data["relationships"]
+    relationships["target"]=relationships["target"].astype(str)
     entities = entities.rename(columns={'id': 'entity_id'})
     if remove_PII:
         if "entity" in entities.columns:
@@ -331,14 +332,13 @@ def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFr
             entities = entities.drop(["description"], axis=1)
         if "description" in relationships.columns:
             relationships = relationships.drop(["description"], axis=1)
-    #source_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='source', how='left', suffixes=('', '_source'))
-    #target_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='target', how='left', suffixes=('', '_target'))
-    #combined_df = pd.concat([source_merged, target_merged], ignore_index=True)
-    #grouped_relationships = combined_df.groupby('entity_id').apply(
-        #lambda x: x[['id', 'source', 'target', 'in_context', 'weight']].dropna().to_dict('records')
-    #).reset_index(name='relationships')
-    #result_df = pd.merge(entities, grouped_relationships, on='entity_id', how='left')
-    result_df = entities
+    source_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='source', how='left', suffixes=('', '_source'))
+    target_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='target', how='left', suffixes=('', '_target'))
+    combined_df = pd.concat([source_merged, target_merged], ignore_index=True)
+    grouped_relationships = combined_df.groupby('entity_id').apply(
+        lambda x: x[['id', 'source', 'target', 'in_context', 'weight']].dropna().to_dict('records')
+    ).reset_index(name='relationships')
+    result_df = pd.merge(entities, grouped_relationships, on='entity_id', how='left')
     result_df = result_df.rename(columns={'entity_id': 'id'})
     return result_df
 
