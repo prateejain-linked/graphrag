@@ -12,7 +12,7 @@ handler.setLevel(logging.DEBUG)
 logging.getLogger().addHandler(handler)
 
 @app.function_name('summarization')
-@app.route(route="summarize", auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
 def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
     query_id = req.params['query']
     artifacts_path = req.params['path']
