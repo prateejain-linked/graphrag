@@ -255,12 +255,13 @@ def indexing(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 @app.function_name('summarization')
-@app.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
+@app.route(route="summarize", auth_level=func.AuthLevel.ANONYMOUS)
 def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
     query_id = req.params['query']
-    output = summarize(query_id)
+    artifacts_path = req.params['path']
+    output = summarize(query_id,artifacts_path)
     return func.HttpResponse(
-        "SUMMARIZED "+str(output),
+        output,
         status_code=200
     )
 
