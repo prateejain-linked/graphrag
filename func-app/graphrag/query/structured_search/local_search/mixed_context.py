@@ -4,7 +4,6 @@
 
 import logging
 import time
-from tkinter import SEL
 from typing import Any
 import ast
 import json
