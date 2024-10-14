@@ -121,14 +121,12 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
             status_code=200
         )
     
-    file_targets: list[str] = []
+    #file_targets: list[str] = []
     for target in targets:
-        file_targets.append(target[0])
-    
-    for file_target in file_targets:
+        file_target = target[1]
         #input for the artifcact storage account
         # context switching for all the target blobs.
-        context_id = file_target.split("/")[0]
+        context_id = target[0].split("/")[0]
         try:
             index_cli(
                 root = "settings",

@@ -39,7 +39,7 @@ def parse_message_get_blob(message: QueueMessage, caller: str) -> str:
         target_blob_url = json.loads(content)['data']['url']
         blob_client = BlobClient.from_blob_url(target_blob_url)
 
-        return blob_client.blob_name
+        return [blob_client.blob_name, blob_client.blob_name]
     
     if caller == 'context':
         content = str(base64.b64decode(message.content).decode('utf-8'))
@@ -48,7 +48,7 @@ def parse_message_get_blob(message: QueueMessage, caller: str) -> str:
 
         blob_name = blob_client.blob_name.split("/")[-1]
 
-        return f"{blob_name}/version=0"
+        return [blob_client.blob_name, f"{blob_name}/version=0"]
 
 
 
