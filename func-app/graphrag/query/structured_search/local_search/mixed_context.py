@@ -3,6 +3,7 @@
 """Algorithms to build context data for local search prompt."""
 
 import logging
+import time
 from typing import Any
 import ast
 import json
@@ -188,17 +189,15 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             print("Entities: ", names)
 
-            if path == 3:
-                #graph search: get relationships
 
-                graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
-                if graphdb_client:
+            graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
+            if graphdb_client:
                     # Call graphdb making a list of dictionary of entity_id to related entities mapping
-                    entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships) for preselected_entity in preselected_entities}
-                    print("Related entities: ", entity_to_related_entities)
-                    preselected_entities = [v["entity_id"] for related_entities in entity_to_related_entities.values() for v in related_entities]
-                else:
-                    print("No graphdb, cannot add relationship context")
+                entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships) for preselected_entity in preselected_entities}
+                print("Related entities: ", entity_to_related_entities)
+                preselected_entities = [v["entity_id"] for related_entities in entity_to_related_entities.values() for v in related_entities]
+            else:
+                print("No graphdb, cannot add relationship context")
 
 
         selected_entities = map_query_to_entities(
@@ -428,7 +427,10 @@ class LocalSearchMixedContext(LocalContextBuilder):
         # if path 3, we have related text units to add to the context
         for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
             for related in related_groups:
-                selected_text_units += vector_store.retrieve_text_units_by_id(ast.literal_eval(related['text_unit_ids']))
+                if related['text_unit_ids'][0]=='[':
+                    selected_text_units += vector_store.retrieve_text_units_by_id(ast.literal_eval(related['text_unit_ids']))
+                else:
+                    selected_text_units += vector_store.retrieve_text_units_by_id([related['text_unit_ids']])
 
         hmap={}
         text_units_kusto={}
