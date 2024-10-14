@@ -164,3 +164,10 @@ global_search:
   # map_max_tokens: 1000
   # reduce_max_tokens: 2000
   # concurrency: 32
+
+output_storage:
+  type: blob # or blob
+  base_dir: "artifacts"
+  storage_account_blob_url: "https://indexedoutputartifacts.blob.core.windows.net"
+  # connection_string: <azure_blob_storage_connection_string>
+  container_name: queryresult

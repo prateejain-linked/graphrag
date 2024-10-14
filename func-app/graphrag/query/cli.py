@@ -188,10 +188,10 @@ def run_local_search(
     final_relationships=[]
 
     if(config.storage.type == StorageType.blob):
-        if(config.storage.container_name is not None):
-             output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.storage.connection_string,
-                                                                          container_name=config.storage.container_name,
-                                                                          storage_account_blob_url=config.storage.storage_account_blob_url)
+        if(config.output_storage.container_name is not None):
+             output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.output_storage.connection_string,
+                                                                          container_name=config.output_storage.container_name,
+                                                                          storage_account_blob_url=config.output_storage.storage_account_blob_url)
         else:
             ValueError("Storage type is Blob but container name is invalid")
     elif(config.storage.type == StorageType.file):
