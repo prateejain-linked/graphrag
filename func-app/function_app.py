@@ -47,10 +47,7 @@ def indexing(mytimer: func.TimerRequest) -> None:
     input_base_dir=None
     # if "input_base_dir" in req.params:
     #     input_base_dir = req.params['input_base_dir']
-    
     output_base_dir=None
-    if "output_base_dir" in req.params:
-        output_base_dir = req.params['output_base_dir']
     
     queue_client = initialize_incoming_msg_queue()
     watermark_client = initialize_watermark_client()
