@@ -20,8 +20,8 @@ def get_relationships_from_graphdb(query:str,selected_entity_names:list[str],gra
             "prop_selected_entity_names": selected_entity_names,
         }
     )
-    time.sleep(1)
-    a = graphdb_client.result_to_df(relationships_result)
+    time.sleep(5)
+    #print(graphdb_client.result_to_df(relationships_result))
     return read_relationships(
         graphdb_client.result_to_df(relationships_result),
         short_id_col="human_readable_id",
@@ -37,7 +37,7 @@ def get_in_network_relationships(
 ) -> list[Relationship]:
     """Get all directed relationships between selected entities, sorted by ranking_attribute."""
     selected_entity_names = [entity.id for entity in selected_entities]
-    if not graphdb_client or True:
+    if not graphdb_client:
         selected_relationships = [
             relationship
             for relationship in relationships
@@ -71,7 +71,7 @@ def get_out_network_relationships(
 ) -> list[Relationship]:
     """Get relationships from selected entities to other entities that are not within the selected entities, sorted by ranking_attribute."""
     selected_entity_names = [entity.id for entity in selected_entities]
-    if not graphdb_client or True:
+    if not graphdb_client:
         source_relationships = [
             relationship
             for relationship in relationships

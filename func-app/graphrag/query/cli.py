@@ -6,6 +6,7 @@
 import ast
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 from typing import cast
@@ -313,7 +314,7 @@ def summarize(query_id:str,artifacts_path:str)->str:
             total_text_units.add(text_unit)
     text_df=read_paraquet_file(output_storage_client,f"{artifacts_path}/create_base_text_units.parquet")
     for text_unit in total_text_units:
-        concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'][0]
+        concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'].iloc[0]
     summarizer = get_summarizer(config)
     return summarizer.summarize(concat_result)
 

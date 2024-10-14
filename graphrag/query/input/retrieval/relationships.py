@@ -20,7 +20,7 @@ def get_relationships_from_graphdb(query:str,selected_entity_names:list[str],gra
             "prop_selected_entity_names": selected_entity_names,
         }
     )
-    time.sleep(1)
+    time.sleep(5)
     print(graphdb_client.result_to_df(relationships_result))
     return read_relationships(
         graphdb_client.result_to_df(relationships_result),
