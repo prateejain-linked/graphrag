@@ -62,8 +62,7 @@ class KustoVectorStore(BaseVectorStore):
         env = os.environ.get("ENVIRONMENT")
         if(env == "AZURE"):
             kcsb = KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(
-                str(cluster), client_id="<>"
-            )
+                str(cluster), client_id=os.environ.get("AZURE_CLIENT_ID") )
         elif(env == "DEVELOPMENT"):
             #kcsb = KustoConnectionStringBuilder.with_aad_device_authentication(str(cluster))
             logging.info("KUSTO DEVELPMENT MODE")
