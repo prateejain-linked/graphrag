@@ -169,10 +169,10 @@ class GraphDBClient:
             message=(
                 f"""g.V().has('id', '{entity_id}')
                   .bothE('connects')
-                  .project('source_id', 'target_id', 'rank','text_unit_ids')
+                  .project('id','source_id', 'target_id', 'weight','text_unit_ids','description','rank')
                     .by(outV().values('id'))
                     .by(inV().values('id'))
-                    .by('rank')
+                    .by('weight')
                     .by('text_unit_ids')
                   .group()
                     .by(select('source_id', 'target_id'))
@@ -180,7 +180,7 @@ class GraphDBClient:
                   .unfold()
                   .select(values)
                   .unfold()
-                  .order().by(select('rank'), decr)
+                  .order().by(select('weight'), decr)
                   .dedup('source_id','target_id')
                   .limit({top})
                 """
@@ -192,9 +192,9 @@ class GraphDBClient:
             for row in rows:
                 source_id = row['source_id']
                 target_id = row['target_id']
-                rank = row['rank']
+                weight = row['weight']
                 text_unit_ids = row['text_unit_ids']
                 related_entity_id = source_id if source_id != entity_id else target_id
-                json_data.append({'entity_id': related_entity_id, 'rank': rank, 'text_unit_ids': text_unit_ids})
+                json_data.append({'id':row['id'],'source':row['source_id'],'target':row['target_id'],'description':row['description'],'rank':row['rank'],'text_unit_ids':text_unit_ids})
 
         return json_data
