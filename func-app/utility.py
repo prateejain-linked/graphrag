@@ -69,7 +69,7 @@ def check_if_watermark_exitst(target_blob: str, watermark_client: BlobPipelineSt
     
     return True
 
-def water_mark_target(targets: list, queue_storage_client: QueueStorageClient, watermark_client: BlobPipelineStorage):
+def water_mark_target(targets: list, queue_storage_client: QueueStorageClient, watermark_client: BlobPipelineStorage, path_prefix: str = None):
     for target in targets:
         key = target[0]
         message : QueueMessage = target[1]
@@ -77,6 +77,8 @@ def water_mark_target(targets: list, queue_storage_client: QueueStorageClient, w
         keys = { "key" : key }
         target_guid = gen_md5_hash(keys, keys.keys())
         target_watermark_blob = f"{target_guid}.watermark"
+        if path_prefix is not None and len(path_prefix) > 0:
+            target_watermark_blob = f"{path_prefix}/{target_guid}.watermark"
         asyncio.run(watermark_client.set(key=target_watermark_blob, value=""))
 
         queue_storage_client.delete_message(message=message)
