@@ -4,6 +4,7 @@
 
 import logging
 import time
+from tkinter import SEL
 from typing import Any
 import ast
 import json
@@ -157,7 +158,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             query = f"{query}\n{pre_user_questions}"
 
 
-        preselected_entities, selected_entities, entity_to_related_entities = [], [], {}
+        preselected_entities, selected_entities, entity_to_related_entities = [], [], []
 
         #path = 4 #1: base, 2,3: paths 4:graphdb simulation
 
@@ -189,15 +190,59 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             print("Entities: ", names)
 
+        selected_entities = map_query_to_entities(
+            query=query,
+            text_embedding_vectorstore=self.entity_text_embeddings,
+            text_embedder=self.text_embedder,
+            all_entities=list(self.entities.values()),
+            embedding_vectorstore_key=self.embedding_vectorstore_key,
+            include_entity_names=include_entity_names,
+            exclude_entity_names=exclude_entity_names,
+            k=top_k_mapped_entities,
+            oversample_scaler=2,
+            preselected_entities=preselected_entities
+        )
+        print("Selected entities titles: ", [entity.title for entity in selected_entities])
+
+
+        graph_search_entities=[]
+        if path in (0,3):
+            #graph search: get relationships
+            for e in selected_entities:
+                graph_search_entities.append(e.id)
+
 
             graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
+
+            def get_unique_edges_from_graph(preselected_entity):
+                time.sleep(1)
+                edges = graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships)
+                return edges
+
             if graphdb_client:
-                    # Call graphdb making a list of dictionary of entity_id to related entities mapping
-                entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships) for preselected_entity in preselected_entities}
+                # Call graphdb making a list of dictionary of entity_id to related entities mapping
+                entity_to_related_entities = {
+                    preselected_entity: get_unique_edges_from_graph(preselected_entity)
+                    for preselected_entity in graph_search_entities
+                }
                 print("Related entities: ", entity_to_related_entities)
-                preselected_entities = [v["entity_id"] for related_entities in entity_to_related_entities.values() for v in related_entities]
             else:
                 print("No graphdb, cannot add relationship context")
+
+            r_id=1
+            relationships=[]
+            for group in entity_to_related_entities.values():
+                for e in group:
+                    r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
+                                            target=e['target'],description=e['description']
+                                            ,attributes={'rank':e['rank']})
+                    r_id+=1
+                    relationships.append(r)
+
+            self.relationships = {
+                relationship.id: relationship for relationship in relationships
+            }
+
 
 
         selected_entities = map_query_to_entities(
