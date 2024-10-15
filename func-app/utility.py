@@ -28,7 +28,8 @@ def find_next_target_index_blob(queue_storage_client: QueueStorageClient, waterm
             queue_storage_client.delete_message(message)
         else:
             target_blob = parse_message_get_blob(message=message, caller=caller)
-            to_process_msgs.append([target_blob, message])
+            target_blob.append(message)
+            to_process_msgs.append(target_blob)
     
     
     return to_process_msgs
