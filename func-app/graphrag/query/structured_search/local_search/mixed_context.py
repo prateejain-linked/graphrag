@@ -172,7 +172,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
             args['deployment_name'] = self.config.llm.deployment_name
             llm_conf = {}
             llm_conf['llm'] = args
-            llm_conf['max_gleanings'] = 0
 
             q_entities = asyncio.run(run_gi(
                 docs=[Document(text=query, id='0')],
@@ -189,6 +188,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             names = [entity['name'] for entity in q_entities]
 
             print("Entities: ", names)
+
 
         selected_entities = map_query_to_entities(
             query=query,
@@ -213,7 +213,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
 
             graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
-
+            
             def get_unique_edges_from_graph(preselected_entity):
                 time.sleep(1)
                 edges = graphdb_client.get_top_related_unique_edges(preselected_entity, top_k_relationships)
@@ -242,7 +242,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
             self.relationships = {
                 relationship.id: relationship for relationship in relationships
             }
-
 
 
         selected_entities = map_query_to_entities(
