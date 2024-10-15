@@ -90,7 +90,7 @@ def indexing(mytimer: func.TimerRequest) -> None:
             )
             logging.info("Successfully processed the message from the queue")
 
-            water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
+            water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client, path_prefix=context_id)
         except:
             logging.error("Error executing the function")
             raise
@@ -149,7 +149,7 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
             )
             logging.info("Successfully processed the message from the queue")
 
-            water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client)
+            water_mark_target(targets=targets, queue_storage_client=queue_client, watermark_client=watermark_client, path_prefix=context_id)
             return func.HttpResponse(
                 "Successfully processed the create / initialized request",
                 status_code=200
