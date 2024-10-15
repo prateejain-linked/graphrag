@@ -314,7 +314,7 @@ class KustoVectorStore(BaseVectorStore):
         for e in entities:
             if e.text_unit_ids==None:
                 continue
-            id_list=ast.literal_eval(e.text_unit_ids)
+            id_list=ast.literal_eval(str(e.text_unit_ids))
             unit_ids.extend([id for id in id_list])
 
         return self.retrieve_text_units_by_id(unit_ids)

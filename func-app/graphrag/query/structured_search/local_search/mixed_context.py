@@ -76,6 +76,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
         use_kusto_community_reports: bool = False,
         config: GraphRagConfig | None = None,
         context_id:str = None,
+        external_entities:list[Entity]| None = None,
+        external_relationships: list[Relationship]| None = None,
+        external_text_units: list[TextUnit]| None = None,
     ):
         if community_reports is None:
             community_reports = []
@@ -102,6 +105,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
         self.use_kusto_community_reports = use_kusto_community_reports
         self.config = config
         self.context_id = context_id
+        self.external_entities = external_entities
+        self.external_text_units = external_text_units
 
     def filter_by_entity_keys(self, entity_keys: list[int] | list[str]):
         """Filter entity text embeddings by entity keys."""
@@ -190,23 +195,26 @@ class LocalSearchMixedContext(LocalContextBuilder):
             print("Entities: ", names)
 
 
-        selected_entities = map_query_to_entities(
-            query=query,
-            text_embedding_vectorstore=self.entity_text_embeddings,
-            text_embedder=self.text_embedder,
-            all_entities=list(self.entities.values()),
-            embedding_vectorstore_key=self.embedding_vectorstore_key,
-            include_entity_names=include_entity_names,
-            exclude_entity_names=exclude_entity_names,
-            k=top_k_mapped_entities,
-            oversample_scaler=2,
-            preselected_entities=preselected_entities
-        )
+        if self.external_entities is not None:
+            selected_entities=self.external_entities
+        else:
+            selected_entities = map_query_to_entities(
+                query=query,
+                text_embedding_vectorstore=self.entity_text_embeddings,
+                text_embedder=self.text_embedder,
+                all_entities=list(self.entities.values()),
+                embedding_vectorstore_key=self.embedding_vectorstore_key,
+                include_entity_names=include_entity_names,
+                exclude_entity_names=exclude_entity_names,
+                k=top_k_mapped_entities,
+                oversample_scaler=2,
+                preselected_entities=preselected_entities
+            )
         print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
 
         graph_search_entities=[]
-        if path in (0,3):
+        if path in (0,3) and self.external_entities is None:
             #graph search: get relationships
             for e in selected_entities:
                 graph_search_entities.append(e.id)
@@ -243,19 +251,21 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 relationship.id: relationship for relationship in relationships
             }
 
-
-        selected_entities = map_query_to_entities(
-            query=query,
-            text_embedding_vectorstore=self.entity_text_embeddings,
-            text_embedder=self.text_embedder,
-            all_entities=list(self.entities.values()),
-            embedding_vectorstore_key=self.embedding_vectorstore_key,
-            include_entity_names=include_entity_names,
-            exclude_entity_names=exclude_entity_names,
-            k=top_k_mapped_entities,
-            oversample_scaler=2,
-            preselected_entities=preselected_entities
-        )
+        if self.external_entities is not None:
+            selected_entities=self.external_entities
+        else:
+            selected_entities = map_query_to_entities(
+                query=query,
+                text_embedding_vectorstore=self.entity_text_embeddings,
+                text_embedder=self.text_embedder,
+                all_entities=list(self.entities.values()),
+                embedding_vectorstore_key=self.embedding_vectorstore_key,
+                include_entity_names=include_entity_names,
+                exclude_entity_names=exclude_entity_names,
+                k=top_k_mapped_entities,
+                oversample_scaler=2,
+                preselected_entities=preselected_entities
+            )
 
         print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
@@ -347,7 +357,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         for e in selected_entities:
             text_units=[]
             if e.text_unit_ids!='' and e.text_unit_ids!=None:
-                text_units.extend(ast.literal_eval(e.text_unit_ids))
+                text_units.extend(ast.literal_eval(str(e.text_unit_ids)))
             if e.title not in entity_to_units:
                 #TODO: change title to id later
                 entity_to_units[e.title]=[]
@@ -466,8 +476,10 @@ class LocalSearchMixedContext(LocalContextBuilder):
         entity_to_related_entities: [dict[str, str]] = [],
     ) -> tuple[str, dict[str, pd.DataFrame]]:
 
-        selected_text_units=vector_store.retrieve_text_units(selected_entities)
-
+        if self.external_text_units is None:
+            selected_text_units=vector_store.retrieve_text_units(selected_entities)
+        else: 
+            selected_text_units = self.external_text_units
         # if path 3, we have related text units to add to the context
         for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
             for related in related_groups:
@@ -497,7 +509,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             if cvar == '' or cvar==None:
                 setattr(unit,column,[])
                 return
-            setattr(unit,column,ast.literal_eval(cvar))
+            setattr(unit,column,ast.literal_eval(str(cvar)))
 
         for unit in selected_text_units:
             str_to_list(unit,'entity_ids')

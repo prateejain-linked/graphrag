@@ -140,7 +140,7 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
 def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
     query_id = req.params['query']
     artifacts_path = req.params['path']
-    output = summarize(query_id,artifacts_path)
+    output = summarize(query_id,artifacts_path,2)
     return func.HttpResponse(
         output,
         status_code=200

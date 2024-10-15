@@ -30,6 +30,7 @@ from graphrag.config import (
 from graphrag.common.progress import PrintProgressReporter
 from graphrag.index.verbs.entities.extraction.strategies.graph_intelligence.run_graph_intelligence import run_gi
 from graphrag.index.verbs.entities.extraction.strategies.typing import Document
+from graphrag.model import relationship
 from graphrag.model.entity import Entity
 from graphrag.query.input.loaders.dfs import (
     store_entity_semantic_embeddings,
@@ -69,7 +70,7 @@ def __get_embedding_description_store(
     )
     config_args.update({"collection_name": f"{collection_name}_{context_id}" if context_id else collection_name})
     vector_name = config_args.get(
-        "vector_search_column", "description_embedding"
+        "vector_search_column", "vector"
     )
     config_args.update({"vector_name": vector_name})
     config_args.update({"reports_name": f"reports_{context_id}" if context_id else "reports"})
@@ -297,7 +298,7 @@ def run_local_search(
     reporter.success(f"Local Search Response: {result.response}")
     return result.response
 
-def summarize(query_id:str,artifacts_path:str)->str:
+def summarize(query_id:str,artifacts_path:str,community_level:int=2)->str:
     data_dir, root_dir, config = _configure_paths_and_settings(
         None, "settings", None
     )
@@ -307,15 +308,44 @@ def summarize(query_id:str,artifacts_path:str)->str:
     blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
     list_json=json.loads(blob_data)
     total_text_units=set()
+    entity_ids=set()
+    relationship_ids=set()
     concat_result=""
     for dict_json in list_json:
         list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
         for text_unit in list_text_units:
             total_text_units.add(text_unit)
+        entity_ids.add(dict_json["id"])
+        list_relationships=ast.literal_eval(str(dict_json["relationships"]))
+        for relationship_json in list_relationships:
+            relationship_ids.add(relationship_json['id'])
     text_df=read_paraquet_file(output_storage_client,f"{artifacts_path}/create_base_text_units.parquet")
     for text_unit in total_text_units:
         concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'].iloc[0]
-    summarizer = get_summarizer(config)
+    vector_store_args = (
+        config.embeddings.vector_store if config.embeddings.vector_store else {}
+    )
+    vector_store_type = vector_store_args.get("type", VectorStoreType.LanceDB)
+    final_nodes = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_nodes.parquet")
+    final_entities_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_entities.parquet")
+    final_entities= final_entities_df[final_entities_df['id'].isin(entity_ids)]
+    entities = read_indexer_entities(final_nodes, final_entities, community_level)
+    description_embedding_store = __get_embedding_description_store(
+        entities=entities,
+        vector_store_type=vector_store_type,
+        config_args=vector_store_args,
+    )
+    final_relationships_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_relationships.parquet")
+    final_relationships = final_relationships_df[final_relationships_df['id'].isin(relationship_ids)]
+    final_text_units_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_text_units.parquet")
+    final_text_units = final_text_units_df[final_text_units_df['id'].isin(total_text_units)]
+    summarizer = get_summarizer(
+        config=config,
+        description_embedding_store=description_embedding_store,
+        external_entities=entities,
+        external_relationships=read_indexer_relationships(final_relationships),
+        external_text_units=read_indexer_text_units(final_text_units)
+    )
     return summarizer.summarize(concat_result)
 
 def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFrame:

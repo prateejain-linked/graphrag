@@ -75,7 +75,7 @@ def build_entity_context(
             new_context.append(field_value)
         new_tokens: int = 0
         if not is_optimized_search:
-            new_context_text = column_delimiter.join(new_context) + "\n"
+            new_context_text = column_delimiter.join(str(new_context)) + "\n"
             new_tokens = num_tokens(new_context_text, token_encoder)
             if current_tokens + new_tokens > max_tokens:
                 break

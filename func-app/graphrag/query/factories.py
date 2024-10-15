@@ -211,7 +211,41 @@ def get_global_search_engine(
         response_type=response_type,
     )
 
-def get_summarizer(config: GraphRagConfig) -> Summarizer:
+def get_summarizer(
+    config: GraphRagConfig,
+    description_embedding_store: BaseVectorStore,
+    external_entities:list[Entity],
+    external_relationships: list[Relationship],
+    external_text_units: list[TextUnit],
+) -> Summarizer:
+    ls_config = config.local_search
     return Summarizer(
-        llm = get_llm(config)
+        llm = get_llm(config),
+        context_builder=LocalSearchMixedContext(
+            text_units=[],
+            entities=[],
+            relationships=[],
+            entity_text_embeddings=description_embedding_store,
+            embedding_vectorstore_key=EntityVectorStoreKey.ID,  # if the vectorstore uses entity title as ids, set this to EntityVectorStoreKey.TITLE
+            text_embedder=get_text_embedder(config),
+            token_encoder=tiktoken.get_encoding(config.encoding_model),
+            config=config,
+            external_entities=external_entities,
+            external_relationships = external_relationships,
+            external_text_units = external_text_units,
+        ),
+        context_builder_params={
+            "text_unit_prop": ls_config.text_unit_prop,
+            "community_prop": ls_config.community_prop,
+            "conversation_history_max_turns": ls_config.conversation_history_max_turns,
+            "conversation_history_user_turns_only": True,
+            "top_k_mapped_entities": ls_config.top_k_entities,
+            "top_k_relationships": ls_config.top_k_relationships,
+            "include_entity_rank": True,
+            "include_relationship_weight": True,
+            "include_community_rank": False,
+            "return_candidate_context": False,
+            "embedding_vectorstore_key": EntityVectorStoreKey.ID,
+            "max_tokens": ls_config.max_tokens, 
+        }
     )
