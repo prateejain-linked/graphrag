@@ -247,7 +247,7 @@ class KustoVectorStore(BaseVectorStore):
     def setup_entities(self) -> None:
         if self._check_if_table_exists(self.collection_name):
             return
-        command = f".drop table {self.collection_name}"
+        command = f".drop table {self.collection_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -310,9 +310,9 @@ class KustoVectorStore(BaseVectorStore):
 
 
     def setup_reports(self) -> None:
-        if self._check_if_table_exists(self.reports_name):
-            return
-        command = f".drop table {self.reports_name}"
+        # if self._check_if_table_exists(self.reports_name):
+        #     return
+        command = f".drop table {self.reports_name} ifexists"
         self.client.execute(self.database, command)
         command = f".create table {self.reports_name} (id: string, short_id: string, title: string, community_id: string, summary: string, full_content: string, rank: real, summary_embedding: dynamic, full_content_embedding: dynamic, attributes: dynamic)"
         self.client.execute(self.database, command)
@@ -336,7 +336,7 @@ class KustoVectorStore(BaseVectorStore):
     def setup_text_units(self) -> None:
         if self._check_if_table_exists(self.text_units_name):
             return
-        command = f".drop table {self.text_units_name}"
+        command = f".drop table {self.text_units_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -456,6 +456,10 @@ class KustoVectorStore(BaseVectorStore):
         ]
 
     def _check_if_table_exists(self, table_name: str) -> bool:
-        command = f".show tables | where TableName == '{table_name}'"
-        response = self.client.execute(self.database, command)
-        return len(response.primary_results) > 0
+        try:
+            command = f".show tables | where TableName == '{table_name}'"
+            response = self.client.execute(self.database, command)
+            return len(response.primary_results) > 0
+        except Exception as ex:
+            logging.error(ex)
+            raise
