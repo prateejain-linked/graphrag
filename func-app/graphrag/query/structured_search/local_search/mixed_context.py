@@ -76,6 +76,10 @@ class LocalSearchMixedContext(LocalContextBuilder):
         use_kusto_community_reports: bool = False,
         config: GraphRagConfig | None = None,
         context_id:str = None,
+        ext_entities=[],
+        ext_relationships=[],
+        ext_text_units=[],
+        
     ):
         if community_reports is None:
             community_reports = []
@@ -102,6 +106,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
         self.use_kusto_community_reports = use_kusto_community_reports
         self.config = config
         self.context_id = context_id
+        self.ext_entities=ext_entities
+        self.ext_relationships=ext_relationships
+        self.ext_text_units=ext_text_units
 
     def filter_by_entity_keys(self, entity_keys: list[int] | list[str]):
         """Filter entity text embeddings by entity keys."""
@@ -133,6 +140,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         column_delimiter: str = "|",
         is_optimized_search: bool = False,
         **kwargs: dict[str, Any],
+        
     ) -> tuple[str | list[str], dict[str, pd.DataFrame]]:
         """
         Build data context for local search prompt.
@@ -161,144 +169,174 @@ class LocalSearchMixedContext(LocalContextBuilder):
         preselected_entities, selected_entities, entity_to_related_entities = [], [], []
         env = os.environ.get("ENVIRONMENT")
 
-        
+        ext_entities = self.ext_entities
+        ext_relationships=self.ext_relationships
+        ext_text_units=self.ext_text_units
 
-        # ENTITY ISOLATION
-        if path in (2,3):
-            args = {}
-            args['type'] = self.config.llm.type
-            args['model'] = self.config.llm.model
-            args['model_supports_json'] = self.config.llm.model_supports_json
-            args['api_base'] = self.config.llm.api_base
-            args['api_version'] = self.config.llm.api_version
-            args['deployment_name'] = self.config.llm.deployment_name          
-            #we don't send the prompt so that the extractor uses the generic promp for query
-            llm_conf = {}
-            llm_conf['llm'] = args
-
-            single_try=True
-
-            if single_try:
-                # It is possible to miss some entities but unlikely since the input string is short
-                llm_conf['max_gleanings'] = 0 # No continuation commands
-
-            q_entities = asyncio.run(run_gi(
-                docs=[Document(text=query, id='0')],
-                entity_types=self.config.entity_extraction.entity_types,
-                reporter = None,
-                pipeline_cache=None,
-                args=llm_conf,
-            ))
-
-            q_entities=q_entities.entities
-
-            if not single_try:
-                # remove potential extra entities
-                # in case of slightly different wording in returned entities, this will
-                # remove useful items.
-                tmp=[]
-                lq=query.lower()
-                for e in q_entities:
-                    if e['name'].lower() not in lq:
-                        continue
-                    tmp.append(e)
-                q_entities=tmp
-
-            '''
-            def entity_to_id(e):
-                h=hashlib.sha256()
-                h.update(e.encode())
-                return h.hexdigest()
-
-            preselected_entities=[entity_to_id(entity['name']) for entity in q_entities]
-            '''
-
-            preselected_entities=[generate_entity_id(entity['name']) for entity in q_entities]
-
-        
-        
-
-        selected_entities = map_query_to_entities(
-            query=query,
-            text_embedding_vectorstore=self.entity_text_embeddings,
-            text_embedder=self.text_embedder,
-            all_entities=list(self.entities.values()),
-            embedding_vectorstore_key=self.embedding_vectorstore_key,
-            include_entity_names=include_entity_names,
-            exclude_entity_names=exclude_entity_names,
-            k=top_k_mapped_entities,
-            oversample_scaler=2,
-            preselected_entities=preselected_entities
-        )
-        print("Selected entities titles: ", [entity.title for entity in selected_entities])
-
-
-        if selected_entities==[]:
-            print("Search returned empty set. Check your query/path")
-            exit(-1)
-
-
-        
-
-        ################## Load  graph data
-
-        if self.config.graphdb.enabled:
-            graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
-        else:
-            graphdb_client=None
-
-
-        graph_search_entities=[]
-
-        if graphdb_client and path in (0,3):
-            # Define entities
-            for e in selected_entities:
-                graph_search_entities.append(e.id)
-
-            # Get related entities
-            entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(
-                                                    preselected_entity, top_k_relationships) 
-                                                    for preselected_entity in graph_search_entities
-                                                }
-            print("Related entities: ", entity_to_related_entities)
+        if ext_entities==[]:
             
-            # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
-            # THIS PART REPLACES graphdb operation in get_[in/out]network_relationship
-            if env=='DEVELOPMENT':
-                #load relationships
-                r_id=1
-                relationships=[]
+            ############### LLM-included flow ###############
 
-                for group in entity_to_related_entities.values():
-                    for e in group:
-                        r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
-                                               target=e['target'],description=e['description']
-                                               ,attributes={'rank':e['rank']})
-                        r_id+=1
-                        relationships.append(r)
+            # ENTITY ISOLATION
+            if path in (2,3):
+                args = {}
+                args['type'] = self.config.llm.type
+                args['model'] = self.config.llm.model
+                args['model_supports_json'] = self.config.llm.model_supports_json
+                args['api_base'] = self.config.llm.api_base
+                args['api_version'] = self.config.llm.api_version
+                args['deployment_name'] = self.config.llm.deployment_name          
+                #we don't send the prompt so that the extractor uses the generic promp for query
+                llm_conf = {}
+                llm_conf['llm'] = args
 
-                self.relationships = {
-                    relationship.id: relationship for relationship in relationships
-                }
+                single_try=True
+
+                if single_try:
+                    # It is possible to miss some entities but unlikely since the input string is short
+                    llm_conf['max_gleanings'] = 0 # No continuation commands
+
+                q_entities = asyncio.run(run_gi(
+                    docs=[Document(text=query, id=str(randint(1,1000)))],
+                    entity_types=self.config.entity_extraction.entity_types,
+                    reporter = None,
+                    pipeline_cache=None,
+                    args=llm_conf,
+                ))
+
+                q_entities=q_entities.entities
+
+                if not single_try:
+                    # remove potential extra entities
+                    # in case of slightly different wording in returned entities, this will
+                    # remove useful items.
+                    tmp=[]
+                    lq=query.lower()
+                    for e in q_entities:
+                        if e['name'].lower() not in lq:
+                            continue
+                        tmp.append(e)
+                    q_entities=tmp
+
+                '''
+                def entity_to_id(e):
+                    h=hashlib.sha256()
+                    h.update(e.encode())
+                    return h.hexdigest()
+
+                preselected_entities=[entity_to_id(entity['name']) for entity in q_entities]
+                '''
+
+                preselected_entities=[generate_entity_id(entity['name']) for entity in q_entities]
+
+            selected_entities = map_query_to_entities(
+                    query=query,
+                    text_embedding_vectorstore=self.entity_text_embeddings,
+                    text_embedder=self.text_embedder,
+                    all_entities=list(self.entities.values()),
+                    embedding_vectorstore_key=self.embedding_vectorstore_key,
+                    include_entity_names=include_entity_names,
+                    exclude_entity_names=exclude_entity_names,
+                    k=top_k_mapped_entities,
+                    oversample_scaler=2,
+                    preselected_entities=preselected_entities
+            )
+
+            print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
 
-            if self.relationships=={}:
-                #create one default relationship to be handled in build_relationship_context
-                rel_list=[]
+            if selected_entities==[]:
+                print("Search returned empty set. Check your query/path")
+                exit(-1)
 
+
+            ################## Load  graph data
+
+            if self.config.graphdb.enabled:
+                graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
+            else:
+                graphdb_client=None
+
+
+            graph_search_entities=[]
+
+            if graphdb_client and path in (0,3):
+                # Define entities
+                for e in selected_entities:
+                    graph_search_entities.append(e.id)
+
+                # Get related entities
+                entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(
+                                                        preselected_entity, top_k_relationships) 
+                                                        for preselected_entity in graph_search_entities
+                                                    }
+                print("Related entities: ", entity_to_related_entities)
                 
-                relationships=rel_list
-                self.relationships = {
-                relationship.id: relationship for relationship in relationships
-                }
+                # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
+                # THIS PART REPLACES graphdb operation in get_[in/out]network_relationship
+                if env=='DEVELOPMENT':
+                    #load relationships
+                    r_id=1
+                    relationships=[]
+
+                    for group in entity_to_related_entities.values():
+                        for e in group:
+                            r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
+                                                target=e['target'],description=e['description']
+                                                ,attributes={'rank':e['rank']})
+                            r_id+=1
+                            relationships.append(r)
+                            print("Relationship:",e['source'],">",e['target'])
+
+                    self.relationships = {
+                        relationship.id: relationship for relationship in relationships
+                    }
+
+
+                if self.relationships=={}:
+                    #create one default relationship to be handled in build_relationship_context
+                    rel_list=[]
+
+                    rel_list.append(Relationship("00000","1","src","target",description="desc"))
+                    relationships=rel_list
+                    self.relationships = {
+                    relationship.id: relationship for relationship in relationships
+                    }
+
+            else:
+                print("No graphdb, cannot add relationship context")
+            
+            ################### End of load graph #########################
+
+            
+
+            found=False
+            __target_units=[]
+            for i in range(len(selected_entities)):
+                e=selected_entities[i]
+                for t in __target_units:
+                    if  t in e.text_unit_ids:
+                        found=True
+                        #print(e)
+                        logging.info("Got unit")
+            if not found:
+                logging.info("unit not returned")
+
+
+            ############# End of LLM-included flow ##############
+            #                                                   #
+            #                                                   #
+            #####################################################
 
         else:
-            print("No graphdb, cannot add relationship context")
+            ### Passed external entities
+            selected_entities=ext_entities
+            self.relationships = {
+                    relationship.id: relationship for relationship in ext_relationships
+            }
         
-        ############################################
+        ##################### PROCESS RESPONSE ##########################
 
-        
-        
 
         # build context
         final_context = list[str]()
@@ -363,13 +401,14 @@ class LocalSearchMixedContext(LocalContextBuilder):
             text_unit_tokens = max(int(max_tokens * text_unit_prop), 0)
 
             
-            if isinstance(self.entity_text_embeddings,KustoVectorStore):
+            if ext_entities!=[] or isinstance(self.entity_text_embeddings,KustoVectorStore):
                 text_unit_context, text_unit_context_data = self._build_text_unit_context_kusto(
                     selected_entities=selected_entities,
                     max_tokens=text_unit_tokens,
                     return_candidate_context=return_candidate_context,
                     vector_store=self.entity_text_embeddings,
-                    entity_to_related_entities=entity_to_related_entities
+                    entity_to_related_entities=entity_to_related_entities,
+                    ext_text_units=ext_text_units
                 )
             else: #legacy
                 text_unit_context, text_unit_context_data = self._build_text_unit_context(
@@ -389,43 +428,47 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
         ############### get doc ids
         
-        entity_to_units={}
-        for e in selected_entities:
-            text_units=[]
-            if e.text_unit_ids!='' and e.text_unit_ids!=None:
-                text_units.extend(ast.literal_eval(e.text_unit_ids))
-            if e.title not in entity_to_units:
-                #TODO: change title to id later
-                entity_to_units[e.title]=[]
-            entity_to_units[e.title].extend(text_units)
-        print("Doc stats per entity") #excluding related entities
+        if ext_entities == []:
+            entity_to_units={}
+            for e in selected_entities:
+                text_units=[]
+                if e.text_unit_ids!='' and e.text_unit_ids!=None:
+                    text_units.extend(ast.literal_eval(e.text_unit_ids))
+                if e.title not in entity_to_units:
+                    #TODO: change title to id later
+                    entity_to_units[e.title]=[]
+                entity_to_units[e.title].extend(text_units)
+            print("Doc stats per entity") #excluding related entities
 
 
-        raw_stats=''
-        for title in entity_to_units:
-            units=entity_to_units[title]
-            for unit in units:
-                docs=self.text_units_kusto[unit]
-                ## Documents IDs per TextUnit per Entity:
-                line=f"> {title}: {unit}: {docs}"
-                print(line)
-                raw_stats+=str(line) + "\n"
+            raw_stats=''
+            for title in entity_to_units:
+                units=entity_to_units[title]
+                for unit in units:
+                    docs=self.text_units_kusto[unit]
+                    ## Documents IDs per TextUnit per Entity:
+                    line=f"> {title}: {unit}: {docs}"
+                    #print(line)
+                    raw_stats+=str(line) + "\n"
 
-        final_context_data['raw']=raw_stats
+            final_context_data['raw']=raw_stats
 
-        target_textunits=[' ']
+            target_textunits=[' ']
 
-        uc=0
-        for u in target_textunits:
-            if u in self.text_units_kusto:
-                uc+=1
-        
-        local_suc = uc/len(self.text_units_kusto)
-        ref_suc=uc/len(target_textunits)
+            uc=0
+            for u in target_textunits:
+                if u in self.text_units_kusto:
+                    uc+=1
+            
+            local_suc = uc/len(self.text_units_kusto)
+            ref_suc=uc/len(target_textunits)
+            ref_suc=int(found)
+            final_context_data['suc']=( f"\n\tQuery local success rate: {local_suc*100}%"
+                                        f"\n\tQuery reference success rate: {ref_suc*100}%"
+                                        )
+        #else: the caller is summarize not query
 
-        final_context_data['suc']=( f"\n\tQuery local success rate: {local_suc*100}%"
-                                    f"\n\tQuery reference success rate: {ref_suc*100}%"
-                                    )
+
         return ("\n\n".join(final_context), final_context_data)
 
     def _build_community_context(
@@ -530,80 +573,89 @@ class LocalSearchMixedContext(LocalContextBuilder):
         context_name: str = "Sources",
         vector_store: BaseVectorStore = None,
         entity_to_related_entities: [dict[str, str]] = [],
+        ext_text_units=[]
     ) -> tuple[str, dict[str, pd.DataFrame]]:
         
-        selected_text_units=vector_store.retrieve_text_units(selected_entities)
 
-        units_dc={}
-        for u in selected_text_units:
-            units_dc[u.id]=u 
+        if ext_text_units==[]:
+            selected_text_units=vector_store.retrieve_text_units(selected_entities)
 
-        selected_text_units=[]
-        added_units={}
-        for e in selected_entities: #sort based on entity description proximity score
-            if e.text_unit_ids=='' or e.text_unit_ids==None:
-                continue
-            units=ast.literal_eval(e.text_unit_ids)
-            for uid in units:
-                if uid in units_dc:
-                    if  uid not in added_units:
-                        selected_text_units.append(units_dc[uid])
-                        added_units[uid]=1
-                else:
-                    print(f"Text unit {uid} not found")
-                    exit(-1)
-        
-        # if path 3, we have related text units to add to the context
-        # Send these units to lower orders. Probably will be ignored by build_text_unit_context()
-        related_unit_ids=[]
-        for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
-            for related in related_groups:
-                related_unit_ids += ast.literal_eval(related['text_unit_ids'])
-        if related_unit_ids!=[]:
-            selected_text_units += vector_store.retrieve_text_units_by_id(related_unit_ids)
+            units_dc={}
+            for u in selected_text_units:
+                units_dc[u.id]=u 
 
-        hmap={}
-        text_units_kusto={}
-        for unit in selected_text_units:
-            if unit.id not in hmap:
-                hmap[unit.id]=unit
-                text_units_kusto[unit.id]=unit.document_ids
-        
-        selected_text_units=[]
-        for id in hmap:
-            selected_text_units.append(hmap[id])
-
+            selected_text_units=[]
+            added_units={}
+            for e in selected_entities: #sort based on entity description proximity score
+                if e.text_unit_ids=='' or e.text_unit_ids==None:
+                    continue
+                units=ast.literal_eval(e.text_unit_ids)
+                for uid in units:
+                    if uid in units_dc:
+                        if  uid not in added_units:
+                            selected_text_units.append(units_dc[uid])
+                            added_units[uid]=1
+                    else:
+                        print(f"Text unit {uid} not found")
+                        exit(-1)
             
-        self.text_units_kusto=text_units_kusto
+            # if path 3, we have related text units to add to the context
+            # Send these units to lower orders. Probably will be ignored by build_text_unit_context()
+            related_unit_ids=[]
+            for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
+                for related in related_groups:
+                    related_unit_ids += ast.literal_eval(related['text_unit_ids'])
+            if related_unit_ids!=[]:
+                selected_text_units += vector_store.retrieve_text_units_by_id(related_unit_ids)
 
-        #ignore sorting selected_text_usnits based on relationship count
-
-        def str_to_list(unit,column):
-            cvar = getattr(unit,column)
-            if cvar == '' or cvar==None:
-                setattr(unit,column,[])
-                return
-            setattr(unit,column,ast.literal_eval(cvar))
-
-
-
-        for unit in selected_text_units:
-            str_to_list(unit,'entity_ids')
-            str_to_list(unit,'relationship_ids')
-            str_to_list(unit,'document_ids')
-
-            ### EMAIL DATASET
-            txt=unit.text
-            loc = txt.find("\"body\"")
-            if loc > -1:
-                unit.text = txt[loc+8:]
-            # if text unit starts from middle of email we don't have body keyword
-
+            hmap={}
+            text_units_kusto={}
+            for unit in selected_text_units:
+                if unit.id not in hmap:
+                    hmap[unit.id]=unit
+                    text_units_kusto[unit.id]=unit.document_ids
             
-            print("Adding source: "+unit.text)
-            if 'margin' in unit.text:
-                print("Got relevance\n",unit.text)
-            
+            selected_text_units=[]
+            for id in hmap:
+                selected_text_units.append(hmap[id])
+
+                
+            self.text_units_kusto=text_units_kusto
+
+            #ignore sorting selected_text_units based on relationship count
+
+            def str_to_list(unit,column):
+                cvar = getattr(unit,column)
+                if cvar == '' or cvar==None:
+                    setattr(unit,column,[])
+                    return
+                setattr(unit,column,ast.literal_eval(cvar))
+
+            #target_unit_margin='baf101552b1a06993bb46b037ede1346cb3823273c5d53d67ca7fe61e61ada44'
+            #target_unit_margin='1d508582ddd16fb1cfc080227a722a8e69047d0c833073ca7f0031c555bb68da'
+
+            for unit in selected_text_units:
+                str_to_list(unit,'entity_ids')
+                str_to_list(unit,'relationship_ids')
+                str_to_list(unit,'document_ids')
+
+                ### EMAIL DATASET
+                body_only=False
+                if body_only:
+                    txt=unit.text
+                    loc = txt.find("\"body\"")
+                    if loc > -1 :
+                        unit.text = txt[loc+8:]
+                    # if text unit starts from middle of email we don't have body keyword
+
+                #if unit.id==target_unit_margin:
+                #    print('Target source')
+                # print("Adding source: "+unit.text)
+                #if 'margin' in unit.text:
+                #    print("Got relevance\n",unit.text)
+        else:
+            selected_text_units=ext_text_units
+            self.text_units_kusto={}
 
         context_text, context_data = build_text_unit_context(
             text_units=selected_text_units,
@@ -751,7 +803,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         final_context_data = {}
 
         # gradually add entities and associated metadata to the context until we reach limit
-        graphdb_client=GraphDBClient(self.config.graphdb,self.context_id) if (self.config.graphdb and self.config.graphdb.enabled) else None
+                
         for entity in selected_entities:
             current_context = []
             current_context_data = {}
@@ -772,7 +824,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 relationship_ranking_attribute=relationship_ranking_attribute,
                 context_name="Relationships",
                 is_optimized_search=is_optimized_search,
-                graphdb_client=graphdb_client,
+                graphdb_client=None, # We do not use graphdb here
             )
             current_context.append(relationship_context)
             current_context_data["relationships"] = relationship_context_data
@@ -804,8 +856,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             final_context_data = current_context_data
 
         # attach entity context to final context
-        if graphdb_client:
-            graphdb_client._client.close()
+        
         final_context_text = entity_context + "\n\n" + "\n\n".join(final_context)
         final_context_data["entities"] = entity_context_data
 

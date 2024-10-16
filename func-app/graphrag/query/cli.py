@@ -22,6 +22,8 @@ from graphrag.config import (
     create_graphrag_config,
     GraphRagConfig,
 )
+
+
 from graphrag.common.progress import PrintProgressReporter
 from graphrag.index.verbs.entities.extraction.strategies.graph_intelligence.run_graph_intelligence import run_gi
 from graphrag.index.verbs.entities.extraction.strategies.typing import Document
@@ -33,7 +35,7 @@ from graphrag.vector_stores import VectorStoreFactory, VectorStoreType
 from graphrag.vector_stores.base import BaseVectorStore
 from graphrag.vector_stores.lancedb import LanceDBVectorStore
 from graphrag.vector_stores.kusto import KustoVectorStore
-from .factories import get_global_search_engine, get_local_search_engine
+from .factories import get_global_search_engine, get_local_search_engine,get_summarizer
 from .indexer_adapters import (
     read_indexer_covariates,
     read_indexer_entities,
@@ -44,6 +46,9 @@ from .indexer_adapters import (
 )
 
 from common.graph_db_client import GraphDBClient
+import json
+import ast
+
 
 reporter = PrintProgressReporter("")
 
@@ -289,8 +294,8 @@ def cs_search(
         result = search_engine.search(query=query,path=path)
     #for key in  result.context_data.keys():
         #asyncio.run(output_storage_client.set("query/output/"+ key +".paraquet", result.context_data[key].to_parquet())) #it shows as error in editor but not an error.
-    reporter.success(f"Local Search Response: {result.response}")
-    print()
+    #reporter.success(f"Local Search Response: {result.response}")
+    
     #return result.response
     return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
 def path1(
@@ -468,3 +473,51 @@ def _read_config_parameters(root: str, config: str | None):
 
     reporter.info("Reading settings from environment variables")
     return create_graphrag_config(root_dir=root)
+
+
+def summarize(query:str,query_id:str,artifacts_path:str,
+              root_dir,
+              response_type="multiple paragraphs",
+              community_level=2)->str:
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, root_dir, None
+    )
+    output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
+    list_json=json.loads(blob_data)
+    total_text_units=set()
+    entity_ids=set()
+    relationship_ids=set()
+ 
+    for dict_json in list_json:
+        list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
+        for text_unit in list_text_units:
+            total_text_units.add(text_unit)
+        entity_ids.add(dict_json["id"])
+        list_relationships=ast.literal_eval(str(dict_json["relationships"]))
+        for relationship_json in list_relationships:
+            relationship_ids.add(relationship_json['id'])
+  
+    final_nodes = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_nodes.parquet")
+    final_entities_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_entities.parquet")
+    final_entities= final_entities_df[final_entities_df['id'].isin(entity_ids)]
+    entities = read_indexer_entities(final_nodes, final_entities, community_level)
+    
+    final_relationships_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_relationships.parquet")
+    final_relationships = final_relationships_df[final_relationships_df['id'].isin(relationship_ids)]
+    final_text_units_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_text_units.parquet")
+    final_text_units = final_text_units_df[final_text_units_df['id'].isin(total_text_units)]
+    
+    summarizer = get_summarizer(
+        config=config,
+        response_type=response_type,
+        external_entities=entities,
+        external_relationships=read_indexer_relationships(final_relationships),
+        external_text_units=read_indexer_text_units(final_text_units)
+    )
+    result = summarizer.summarize(query)
+    return result.response
+
+
