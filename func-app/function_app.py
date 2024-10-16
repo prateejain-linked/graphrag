@@ -47,7 +47,7 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
                 query=query,
                 optimized_search=False,
                 use_kusto_community_reports=False,
-                paths=int(path),
+                path=int(path),
             )
     
     return func.HttpResponse(
@@ -116,7 +116,19 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
+@app.function_name('summarization')
+@app.route(route="summarize", auth_level=func.AuthLevel.ANONYMOUS)
+def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
 
+    query = req.params['query']
+    query_id = req.params['query_id']
+    artifacts_path = req.params['artifacts_path']
+    output = summarize(query=query,query_id=query_id,artifacts_path=artifacts_path,
+                       root_dir='.\\exe')
+    return func.HttpResponse(
+        output,
+        status_code=200
+    )
 
 '''
 @app.function_name('IndexingPipelineFunc')

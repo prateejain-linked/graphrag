@@ -29,7 +29,7 @@ from graphrag.query.structured_search.global_search.search import GlobalSearch
 from graphrag.query.structured_search.local_search.mixed_context import (
     LocalSearchMixedContext,
 )
-from graphrag.query.structured_search.local_search.search import LocalSearch
+from graphrag.query.structured_search.local_search.search import LocalSearch, Summarizer
 from graphrag.vector_stores import BaseVectorStore
 
 from graphrag.query.summarizer import Summarizer
@@ -214,7 +214,52 @@ def get_global_search_engine(
         response_type=response_type,
     )
 
-def get_summarizer(config: GraphRagConfig) -> Summarizer:
+def get_summarizer(
+    config: GraphRagConfig,
+    response_type:str,
+    external_entities:list[Entity],
+    external_relationships: list[Relationship],
+    external_text_units: list[TextUnit],
+) :
+    llm = get_llm(config)
+    text_embedder = get_text_embedder(config)
+    token_encoder = tiktoken.get_encoding(config.encoding_model)
+
+    ls_config = config.local_search
+
     return Summarizer(
-        llm = get_llm(config)
+        llm=llm,
+        context_builder=LocalSearchMixedContext(
+            entities=[],
+            entity_text_embeddings=None, # no vector store here
+            embedding_vectorstore_key=EntityVectorStoreKey.ID, 
+            text_embedder=text_embedder,
+            token_encoder=token_encoder,
+            config=config,
+            ext_entities=external_entities,
+            ext_relationships=external_relationships,
+            ext_text_units=external_text_units
+        ),
+        token_encoder=token_encoder,
+        llm_params={
+            "max_tokens": ls_config.llm_max_tokens,  # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 1000=1500)
+            "temperature": ls_config.temperature,
+            "top_p": ls_config.top_p,
+            "n": ls_config.n,
+        },
+        context_builder_params={
+            "text_unit_prop": ls_config.text_unit_prop,
+            "community_prop": ls_config.community_prop,
+            "conversation_history_max_turns": ls_config.conversation_history_max_turns,
+            "conversation_history_user_turns_only": True,
+            "top_k_mapped_entities": ls_config.top_k_entities,
+            "top_k_relationships": ls_config.top_k_relationships,
+            "include_entity_rank": True,
+            "include_relationship_weight": True,
+            "include_community_rank": False,
+            "return_candidate_context": False,
+            "embedding_vectorstore_key": EntityVectorStoreKey.ID,  # set this to EntityVectorStoreKey.TITLE if the vectorstore uses entity title as ids
+            "max_tokens": ls_config.max_tokens,  # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 5000)
+        },
+        response_type=response_type,
     )
