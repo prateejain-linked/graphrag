@@ -384,7 +384,7 @@ class KustoVectorStore(BaseVectorStore):
             command = f".show tables | where TableName == '{table_name}'"
             response = self.client.execute(self.database, command)
             logging.info(f"The table {table_name} exists status: {str(len(response.primary_results))}")
-            return len(response.primary_results) > 0
+            return response.primary_results[0].rows_count > 0
         except Exception as ex:
             logging.error(ex)
             raise
