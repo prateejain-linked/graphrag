@@ -520,4 +520,21 @@ def summarize(query:str,query_id:str,artifacts_path:str,
     result = summarizer.summarize(query)
     return result.response
 
-
+def rrf_scoring(query_ids,k=60):
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, root_dir, None
+    )
+    rrf_scores = {}
+    output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    for query_id in query_ids:
+        blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
+        list_json=json.loads(blob_data)
+        for entity_json in list_json:
+            for text_unit_id in ast.literal_eval(entity_json["text_unit_ids"]):
+                entity_text_unit = (entity_json["id"],text_unit_id)
+                if entity_text_unit not in rrf_scores:
+                    rrf_scores[entity_text_unit] = 0
+                rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"])
+    return rrf_scores
