@@ -130,6 +130,7 @@ def read_relationships(
     """Read relationships from a dataframe."""
     relationships = []
     for idx, row in df.iterrows():
+        row[weight_col]=float(row[weight_col])
         rel = Relationship(
             id=to_str(row, id_col),
             short_id=to_optional_str(row, short_id_col) if short_id_col else str(idx),

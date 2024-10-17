@@ -229,7 +229,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 preselected_entities=[entity_to_id(entity['name']) for entity in q_entities]
                 '''
 
-                preselected_entities=[generate_entity_id(entity['name']) for entity in q_entities]
+                preselected_entities=[generate_entity_id('"'+entity['name']+'"') for entity in q_entities]
 
             selected_entities = map_query_to_entities(
                     query=query,
@@ -833,7 +833,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         final_context_data = {}
 
         # gradually add entities and associated metadata to the context until we reach limit
-                
+        graphdb_client=GraphDBClient(self.config.graphdb,self.context_id) if (self.config.graphdb and self.config.graphdb.enabled) else None
         for entity in selected_entities:
             current_context = []
             current_context_data = {}
@@ -854,7 +854,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 relationship_ranking_attribute=relationship_ranking_attribute,
                 context_name="Relationships",
                 is_optimized_search=is_optimized_search,
-                graphdb_client=None, # We do not use graphdb here
+                graphdb_client=graphdb_client, # We do not use graphdb here
             )
             current_context.append(relationship_context)
             current_context_data["relationships"] = relationship_context_data
@@ -884,6 +884,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             final_context = current_context
             final_context_data = current_context_data
+
+        if graphdb_client:
+            graphdb_client._client.close()
 
         # attach entity context to final context
         

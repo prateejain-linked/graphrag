@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import cast
 from io import BytesIO
+import uuid
 
 from datashaper import VerbCallbacks
 from graphrag.common.progress.rich import RichProgressReporter
