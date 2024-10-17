@@ -234,6 +234,7 @@ def _create_vector_store(
     if reports_name:
         vector_store_config.update({"reports_name": reports_name})
 
+    vector_store_config.update({"docs_tbl_name": ""})
     vector_store = VectorStoreFactory.get_vector_store(
         vector_store_type, kwargs=vector_store_config
     )
