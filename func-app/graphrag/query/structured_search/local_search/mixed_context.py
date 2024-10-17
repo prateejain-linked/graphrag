@@ -242,6 +242,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     preselected_entities=preselected_entities
             )
 
+
             print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
 
@@ -266,10 +267,12 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     graph_search_entities.append(e.id)
 
                 # Get related entities
-                entity_to_related_entities = {preselected_entity: graphdb_client.get_top_related_unique_edges(
-                                                        preselected_entity, top_k_relationships) 
-                                                        for preselected_entity in graph_search_entities
-                                                    }
+                entity_to_related_entities={}
+                for e in graph_search_entities:
+                    if e not in entity_to_related_entities:
+                        entity_to_related_entities[e] = graphdb_client.get_top_related_unique_edges(e, top_k_relationships) 
+
+
                 print("Related entities: ", entity_to_related_entities)
                 
                 # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
@@ -283,7 +286,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
                         for e in group:
                             r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
                                                 target=e['target'],description=e['description']
-                                                ,attributes={'rank':e['rank']})
+                                                ,attributes={'rank':e['rank']}, source_id=e['source_id']
+                                                ,target_id=e['target_id'])
                             r_id+=1
                             relationships.append(r)
                             print("Relationship:",e['source'],">",e['target'])
@@ -297,7 +301,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     #create one default relationship to be handled in build_relationship_context
                     rel_list=[]
 
-                    rel_list.append(Relationship("00000","1","src","target",description="desc"))
+                    rel_list.append(Relationship("00000","1","src","target",description="decr"))
                     relationships=rel_list
                     self.relationships = {
                     relationship.id: relationship for relationship in relationships
@@ -310,8 +314,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             
 
-            found=False
+            found=False        
             __target_units=[]
+
             for i in range(len(selected_entities)):
                 e=selected_entities[i]
                 for t in __target_units:
@@ -429,31 +434,51 @@ class LocalSearchMixedContext(LocalContextBuilder):
         ############### get doc ids
         
         if ext_entities == []:
-            entity_to_units={}
+
+            #prepare raw report
+
+            raw_result=[]
+
             for e in selected_entities:
-                text_units=[]
-                if e.text_unit_ids!='' and e.text_unit_ids!=None:
-                    text_units.extend(ast.literal_eval(e.text_unit_ids))
-                if e.title not in entity_to_units:
-                    #TODO: change title to id later
-                    entity_to_units[e.title]=[]
-                entity_to_units[e.title].extend(text_units)
-            print("Doc stats per entity") #excluding related entities
+                row={ }
+                row['entity_id']=e.id
+                row['rank']=e.rank
+                
+                r_lines=[]
+                for r in entity_to_related_entities[e.id]: 
+                    r_line={}                  
+                    r_line['id']=r['id']
+                    r_line['source']=r['source_id']
+                    r_line['target']=r['target_id']
+                    r_line['rank']=r['rank']
+                    r_line['weight']=r['weight']
+                    # TODO: relationship textunits are not currently stored, including for the nodes and the edge
+                    #r_line['text_unit_id']=self.text_units_kusto[ ast.literal_eval(r['text_unit_ids'])[0] ]
+                    r_lines.append(r_line)
+                
+                row['relationships']=r_lines
+                row['text_unit_ids']=ast.literal_eval(e.text_unit_ids) if (
+                    e.text_unit_ids!='' and e.text_unit_ids != None) else []
+                docs=[]
+            
+                for unit in row['text_unit_ids']:
+                    doc_id_list = self.text_units_kusto[unit] #normally only one document in the array
+                    docs.extend(doc_id_list) 
+                
+                hmap={}
+                for id in docs:
+                    hmap[id]=1
+                docs=list(hmap.keys())
 
+                row['document_ids']=docs # for entities only
 
-            raw_stats=''
-            for title in entity_to_units:
-                units=entity_to_units[title]
-                for unit in units:
-                    docs=self.text_units_kusto[unit]
-                    ## Documents IDs per TextUnit per Entity:
-                    line=f"> {title}: {unit}: {docs}"
-                    #print(line)
-                    raw_stats+=str(line) + "\n"
+                raw_result.append(row)
 
-            final_context_data['raw']=raw_stats
+            final_context_data['raw_result'] = raw_result
 
-            target_textunits=[' ']
+            
+            # success gauge
+            target_textunits=[ ]
 
             uc=0
             for u in target_textunits:
@@ -466,6 +491,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             final_context_data['suc']=( f"\n\tQuery local success rate: {local_suc*100}%"
                                         f"\n\tQuery reference success rate: {ref_suc*100}%"
                                         )
+            
         #else: the caller is summarize not query
 
 
@@ -599,12 +625,14 @@ class LocalSearchMixedContext(LocalContextBuilder):
                         print(f"Text unit {uid} not found")
                         exit(-1)
             
-            # if path 3, we have related text units to add to the context
+            # if path 0,3, we have relationship text units to add to the context
             # Send these units to lower orders. Probably will be ignored by build_text_unit_context()
             related_unit_ids=[]
             for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
                 for related in related_groups:
-                    related_unit_ids += ast.literal_eval(related['text_unit_ids'])
+                    text_unit_list=ast.literal_eval(related['text_unit_ids'])
+                    # a relationship might associated with multiple textunits
+                    related_unit_ids += text_unit_list
             if related_unit_ids!=[]:
                 selected_text_units += vector_store.retrieve_text_units_by_id(related_unit_ids)
 
@@ -613,7 +641,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
             for unit in selected_text_units:
                 if unit.id not in hmap:
                     hmap[unit.id]=unit
-                    text_units_kusto[unit.id]=unit.document_ids
+                    text_units_kusto[unit.id]=ast.literal_eval(unit.document_ids) if (
+                        unit.document_ids!='' and unit.document_ids!=None ) else []
             
             selected_text_units=[]
             for id in hmap:
@@ -631,8 +660,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     return
                 setattr(unit,column,ast.literal_eval(cvar))
 
-            #target_unit_margin='baf101552b1a06993bb46b037ede1346cb3823273c5d53d67ca7fe61e61ada44'
-            #target_unit_margin='1d508582ddd16fb1cfc080227a722a8e69047d0c833073ca7f0031c555bb68da'
+
 
             for unit in selected_text_units:
                 str_to_list(unit,'entity_ids')
