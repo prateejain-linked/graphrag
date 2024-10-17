@@ -6,7 +6,7 @@ import csv
 import codecs
 from graphrag.index.cli import index_cli
 import os 
-from graphrag.query.cli import run_local_search, summarize
+from graphrag.query.cli import run_local_search, summarize, rrf_scoring
 from time import sleep
 app = func.FunctionApp()
 
@@ -153,6 +153,17 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
+
+@app.function_name('rrf')
+@app.route(route="rrf", auth_level=func.AuthLevel.ANONYMOUS)
+def rrf(req: func.HttpRequest) -> func.HttpResponse:
+
+    query_ids = json.loads(req.params['query_ids'])
+    output = rrf_scoring(query_ids=query_ids)
+    return func.HttpResponse(
+        str(output),
+        status_code=200
+    )
 
 '''
 @app.function_name('IndexingPipelineFunc')
