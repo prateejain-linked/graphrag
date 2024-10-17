@@ -50,7 +50,7 @@ from .indexer_adapters import (
 from common.graph_db_client import GraphDBClient
 import json
 import ast
-
+import uuid
 
 reporter = PrintProgressReporter("")
 
@@ -171,7 +171,8 @@ def cs_search(
     query: str,
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
-    path=0
+    path=0,
+    save_result=False
     ):
 
     """Run a local search with the given query."""
@@ -191,17 +192,6 @@ def cs_search(
     covariates=[]
     reports=[]
     final_relationships=[]
-
-    if(config.storage.type == StorageType.blob):
-        if(config.storage.container_name is not None):
-             output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.storage.connection_string,
-                                                                          container_name=config.storage.container_name,
-                                                                          storage_account_blob_url=config.storage.storage_account_blob_url)
-        else:
-            ValueError("Storage type is Blob but container name is invalid")
-    elif(config.storage.type == StorageType.file):
-        output_storage_client: PipelineStorage = FilePipelineStorage(config.root_dir)
-
 
 
     ##### LEGACY #######################
@@ -290,16 +280,37 @@ def cs_search(
         use_kusto_community_reports=use_kusto_community_reports,
     )
 
+    
     if optimized_search:
         result = search_engine.optimized_search(query=query)
     else:
         result = search_engine.search(query=query,path=path)
-    #for key in  result.context_data.keys():
-        #asyncio.run(output_storage_client.set("query/output/"+ key +".paraquet", result.context_data[key].to_parquet())) #it shows as error in editor but not an error.
-    #reporter.success(f"Local Search Response: {result.response}")
+
     
-    #return result.response
-    return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
+
+    pt_enabled = os.environ.get("PROTOTYPE")
+    local_test = not pt_enabled
+
+    if local_test:
+        return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
+    
+    raw_result=query + "\n__RAW_RESULT__:\n"+ json.dumps(result.context_data['raw_result'])
+    
+    if save_result:
+        query_id= uuid.uuid4()
+        blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+        asyncio.run(blob_storage_client.set(
+                            f"query/{query_id}/output.json",raw_result
+                        ) 
+                    ) 
+        return str(query_id)
+    
+    return raw_result
+
+
+
 def path1(
     config_dir: str | None,
     data_dir: str | None,
@@ -334,28 +345,7 @@ def path2(
         data_dir, root_dir, config_dir
     )
 
-    # Populate args with dict of arguments for the LLM
-    args = {}
-    args['api_key'] = config.llm.api_key
-    args['type'] = config.llm.type
-    args['model'] = config.llm.model
-    args['model_supports_json'] = config.llm.model_supports_json
-    args['api_base'] = config.llm.api_base
-    args['api_version'] = config.llm.api_version
-    args['deployment_name'] = config.llm.deployment_name
-    llmm = {}
-    llmm['llm'] = args
-
-
-    result = asyncio.run(run_gi(
-        docs=[Document(text=query, id='0')],
-        entity_types=config.entity_extraction.entity_types,
-        reporter = None,
-        pipeline_cache=None,
-        args=llmm,
-    ))
-
-    print(result.entities)
+    
     exit(0)
 
 def path3(
@@ -402,11 +392,12 @@ def run_local_search(
     query: str,
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
-    path = 0,):
+    path = 0,
+    save_result=False):
     """Run a local search with the given query."""
     
     return cs_search(config_dir, data_dir, root_dir, community_level, response_type, context_id, 
-                     query, optimized_search, use_kusto_community_reports, path=path)
+                     query, optimized_search, use_kusto_community_reports, path=path,save_result=save_result)
 
 def blob_exists(container_client, blob_name):
     blob_client = container_client.get_blob_client(blob_name)
@@ -497,47 +488,113 @@ def _read_config_parameters(root: str, config: str | None):
     return create_graphrag_config(root_dir=root)
 
 
-def summarize(query:str,query_id:str,artifacts_path:str,
+def summarize(query_id:str,
               root_dir,
               response_type="multiple paragraphs",
               community_level=2)->str:
     data_dir, root_dir, config = _configure_paths_and_settings(
         None, root_dir, None
     )
-    output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
+    blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
-    blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
-    list_json=json.loads(blob_data)
-    total_text_units=set()
-    entity_ids=set()
-    relationship_ids=set()
- 
-    for dict_json in list_json:
-        list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
-        for text_unit in list_text_units:
-            total_text_units.add(text_unit)
-        entity_ids.add(dict_json["id"])
-        list_relationships=ast.literal_eval(str(dict_json["relationships"]))
-        for relationship_json in list_relationships:
-            relationship_ids.add(relationship_json['id'])
-  
-    final_nodes = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_nodes.parquet")
-    final_entities_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_entities.parquet")
-    final_entities= final_entities_df[final_entities_df['id'].isin(entity_ids)]
-    entities = read_indexer_entities(final_nodes, final_entities, community_level)
     
-    final_relationships_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_relationships.parquet")
-    final_relationships = final_relationships_df[final_relationships_df['id'].isin(relationship_ids)]
-    final_text_units_df = read_paraquet_file(output_storage_client, f"{artifacts_path}/create_final_text_units.parquet")
-    final_text_units = final_text_units_df[final_text_units_df['id'].isin(total_text_units)]
+    index_storage_client = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+
+
+    blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
+
+    if type(blob_data)!= str:
+        return "Invalid query result"
+    
+    delimiter="\n__RAW_RESULT__:\n"
+    pdelim=blob_data.find(delimiter)
+    if pdelim==-1:
+        return "Invalid query result"
+
+    query=blob_data[:pdelim]
+
+    raw_json=blob_data[pdelim+len(delimiter):]
+
+    list_json=json.loads(raw_json)
+    
+    blob_history={
+        'loaded_entities':set(),
+        'loaded_relationships':set(),
+        'loaded_text_units':set()
+    }
+    
+    entities=[]
+    relationships=[]
+    text_units=[]
+
+
+    for dict_json in list_json:
+        #one entity per json row
+        # Entity -> text unit list, relationship list , document list [one entry]
+
+        entity_id = dict_json['entity_id']
+        
+
+        doc = dict_json["document_ids"] # Exactly ONE doc for each list of text units
+        if len(doc) != 1: 
+            return "Invalid query file. Document ID configuration not supported"
+        doc=doc[0]
+
+        list_relationships=dict_json["relationships"]
+        list_text_units=dict_json["text_unit_ids"]
+
+        #LOAD everything we need from this document
+        artifacts_path = f'artifacts/{doc}/version=0'
+
+        if entity_id not in blob_history['loaded_entities']:
+            blob_history['loaded_entities'].add(entity_id)
+            
+            _nodes = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_nodes.parquet")
+            _entities_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_entities.parquet")
+            _entities= _entities_df[_entities_df['id'].isin([entity_id])] #isolate the target
+            entities += read_indexer_entities(_nodes, _entities, community_level) #append
+        
+        #########################################################
+
+        # We do not have relationship text units
+        # relationships not supported at summarization stage
+        '''
+        artifacts_path='unknown'
+        rels_to_load=[]
+        for r in list_relationships:
+            if r['id'] not in blob_history['loaded_relationships']:
+                blob_history['loaded_relationships'].add(r['id'])
+                rels_to_load.append(r['id'])
+
+        if rels_to_load != []:
+            _relationships_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_relationships.parquet")
+            _relationships = _relationships_df[_relationships_df['id'].isin(rels_to_load)]
+            relationships += read_indexer_relationships(_relationships)
+        '''
+        ##########################################################
+
+        units_to_load = []
+        for u in list_text_units:
+            if u not in blob_history["loaded_text_units"]:
+                blob_history["loaded_text_units"].add(u)
+                units_to_load.append(u)
+        
+        if units_to_load != []:
+            _text_units_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_text_units.parquet")
+            _text_units = _text_units_df[_text_units_df['id'].isin(units_to_load)]
+            if len(_text_units)!=len(units_to_load):
+                return "Invlaid parquet file"
+            text_units += read_indexer_text_units(_text_units)
     
     summarizer = get_summarizer(
         config=config,
         response_type=response_type,
         external_entities=entities,
-        external_relationships=read_indexer_relationships(final_relationships),
-        external_text_units=read_indexer_text_units(final_text_units)
+        external_relationships=relationships,
+        external_text_units=text_units
     )
     result = summarizer.summarize(query)
     return result.response

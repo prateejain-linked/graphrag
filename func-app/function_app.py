@@ -56,6 +56,53 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
+@app.function_name('QUERYAndSaveFunc')
+@app.route(route="query-save", auth_level=func.AuthLevel.ANONYMOUS)
+def query(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request.')
+    logging.info("Parameters: "+str(req.params))
+    
+    if 'context_id' in req.params:
+        context_id=req.params['context_id']
+        query=req.params['query']
+        path=req.params['paths']
+    else:
+        return func.HttpResponse(
+        "Must send context id and context operation",
+        status_code=200
+        )
+    logging.info("Query start")
+    result=run_local_search(
+                None,
+                None,
+                '.\\exe',
+                community_level=2,
+                response_type="",
+                context_id=context_id,
+                query=query,
+                optimized_search=False,
+                use_kusto_community_reports=False,
+                path=int(path),
+                save_result=True
+            )
+    
+    return func.HttpResponse(
+        "\n[>] Query completed\n\n\n"+result,
+        status_code=200
+    )
+
+@app.function_name('summarization')
+@app.route(route="summarize", auth_level=func.AuthLevel.ANONYMOUS)
+def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
+
+    query_id = req.params['query_id']
+    output = summarize(query_id=query_id, root_dir='.\\exe')
+    return func.HttpResponse(
+        output,
+        status_code=200
+    )
+
+
 @app.function_name('index')
 @app.route(route="index", auth_level=func.AuthLevel.ANONYMOUS)    
 def context_switch(req: func.HttpRequest) -> func.HttpResponse:
@@ -116,19 +163,6 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
-@app.function_name('summarization')
-@app.route(route="summarize", auth_level=func.AuthLevel.ANONYMOUS)
-def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
-
-    query = req.params['query']
-    query_id = req.params['query_id']
-    artifacts_path = req.params['artifacts_path']
-    output = summarize(query=query,query_id=query_id,artifacts_path=artifacts_path,
-                       root_dir='.\\exe')
-    return func.HttpResponse(
-        output,
-        status_code=200
-    )
 
 '''
 @app.function_name('IndexingPipelineFunc')
