@@ -159,12 +159,12 @@ global_search:
 query_context:
     files: [
         "output/gbarrnschez/artifacts/0",
-        "output/gbarrnschez/artifacts/1",
-        "output/gbarrnschez/artifacts/2",
-        "output/gbarrnschez/artifacts/3",
-        "output/gbarrnschez/artifacts/4",
-        "output/gbarrnschez/artifacts/5",
-        "output/gbarrnschez/artifacts/6",
+        #"output/gbarrnschez/artifacts/1",
+        #"output/gbarrnschez/artifacts/2",
+        #"output/gbarrnschez/artifacts/3",
+        #"output/gbarrnschez/artifacts/4",
+        #"output/gbarrnschez/artifacts/5",
+        #"output/gbarrnschez/artifacts/6",
     ]
 
 
