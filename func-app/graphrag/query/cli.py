@@ -514,7 +514,7 @@ def summarize(query_id:str,
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
 
-        list_relationships=dict_json["relationships"]
+        #list_relationships=dict_json.get("relationships",[])
         list_text_units=dict_json["text_unit_ids"]
 
         #LOAD everything we need from this document
@@ -604,7 +604,7 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
                 entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
                 if entity_text_unit not in rrf_scores:
                     rrf_scores[entity_text_unit] = 0
-                rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"])
+                rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"]) #assuming rank is stored as an integer
 
 
     result=[]
