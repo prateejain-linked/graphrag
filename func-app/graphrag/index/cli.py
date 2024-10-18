@@ -11,8 +11,6 @@ import sys
 import time
 import warnings
 from pathlib import Path
-import re
-
 import os
 
 from typing import cast
@@ -328,11 +326,6 @@ def index_cli(
     f.close()
 
 
-
-def get_target_file_pattern(files : list[str]) -> str:
-    regex = re.compile("(?=(" + "|".join(map(re.escape, files)) + "))")
-
-    return regex.pattern
 
 def _switch_context(root: str, config: str,
                     reporter: ProgressReporter, context_operation: str | None,

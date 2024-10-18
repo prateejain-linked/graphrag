@@ -6,20 +6,10 @@ import csv
 import codecs
 from graphrag.index.cli import index_cli
 import os 
-from graphrag.query.cli import run_local_search, summarize
+
+from graphrag.query.cli import run_local_search, summarize,rrf_scoring
 from time import sleep
 app = func.FunctionApp()
-
-@app.function_name('summarization')
-@app.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
-def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
-    query_id = req.params['query']
-    artifacts_path = req.params['path']
-    output = summarize(query_id,artifacts_path)
-    return func.HttpResponse(
-        output,
-        status_code=200
-    )
 
 @app.function_name('QUERYFunc')
 @app.route(route="query", auth_level=func.AuthLevel.ANONYMOUS)
@@ -102,6 +92,17 @@ def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200
     )
 
+
+@app.function_name('rrf-app')
+@app.route(route="rrf", auth_level=func.AuthLevel.ANONYMOUS)
+def rrf(req: func.HttpRequest) -> func.HttpResponse:
+
+    query_ids = req.params['query_ids']
+    output = rrf_scoring(query_ids=query_ids,root_dir='.\\exe')
+    return func.HttpResponse(
+        str(output),
+        status_code=200
+    )
 
 @app.function_name('index')
 @app.route(route="index", auth_level=func.AuthLevel.ANONYMOUS)    
@@ -205,7 +206,4 @@ def index(mytimer: func.TimerRequest) -> None:
  
     logging.info("Indexer completed for batch "+str(batch_index))
 
-def executing_correct_func_app(req: func.HttpRequest, route: str):
-    return os.getenv("ENVIRONMENT") == "AZURE" and  os.getenv("APP_NAME")!= route
-            
 '''

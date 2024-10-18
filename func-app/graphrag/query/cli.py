@@ -361,26 +361,6 @@ def path3(
     ):
     ValueError("Not implemented")
 
-def summarize(query_id:str,artifacts_path:str)->str:
-    data_dir, root_dir, config = _configure_paths_and_settings(
-        None, "settings", None
-    )
-    output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.storage.connection_string,
-                                                                container_name=config.storage.container_name,
-                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
-    blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
-    list_json=json.loads(blob_data)
-    total_text_units=set()
-    concat_result=""
-    for dict_json in list_json:
-        list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
-        for text_unit in list_text_units:
-            total_text_units.add(text_unit)
-    text_df=read_paraquet_file(output_storage_client,f"{artifacts_path}/create_base_text_units.parquet")
-    for text_unit in total_text_units:
-        concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'][0]
-    summarizer = get_summarizer(config)
-    return summarizer.summarize(concat_result)
 
 def run_local_search(
     config_dir: str | None,
@@ -509,14 +489,7 @@ def summarize(query_id:str,
     if type(blob_data)!= str:
         return "Invalid query result"
     
-    delimiter="\n__RAW_RESULT__:\n"
-    pdelim=blob_data.find(delimiter)
-    if pdelim==-1:
-        return "Invalid query result"
-
-    query=blob_data[:pdelim]
-
-    raw_json=blob_data[pdelim+len(delimiter):]
+    query,raw_json = split_raw_response(blob_data)
 
     list_json=json.loads(raw_json)
     
@@ -543,7 +516,8 @@ def summarize(query_id:str,
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
 
-        list_relationships=dict_json["relationships"]
+
+        #list_relationships=dict_json.get("relationships",[])
         list_text_units=dict_json["text_unit_ids"]
 
         #LOAD everything we need from this document
@@ -600,3 +574,60 @@ def summarize(query_id:str,
     return result.response
 
 
+def split_raw_response(data):
+    delimiter="\n__RAW_RESULT__:\n"
+    pdelim=data.find(delimiter)
+    if pdelim==-1:
+        print( "Invalid query result")
+        exit(-1)
+
+    query=data[:pdelim]
+
+    raw_json=data[pdelim+len(delimiter):]
+
+    return query,raw_json
+
+def rrf_scoring(query_ids:str,root_dir:str,k=60):
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, root_dir, None
+    )
+    rrf_scores = {}
+    blob_storage_client = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    
+    query_ids=query_ids.split(',')
+    print('RRF over',query_ids)
+
+    for query_id in query_ids:
+        blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
+        q,raw_json=split_raw_response(blob_data)
+        list_json=json.loads(raw_json)
+        for entity_json in list_json:
+            for text_unit_id in entity_json["text_unit_ids"]:
+                entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
+                if entity_text_unit not in rrf_scores:
+                    rrf_scores[entity_text_unit] = 0
+                rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"]) #assuming rank is stored as an integer
+
+
+    result=[]
+    for couple in rrf_scores:
+        d=couple.find(":")
+        entity_id = couple[:d]
+        text_unit_id=couple[d+1:]
+        result.append({'entity_id':entity_id,
+                       'text_unit_id:':text_unit_id,
+                       'rank':rrf_scores[couple]})
+        
+
+    result= json.dumps(result)
+
+    new_query_id= uuid.uuid4()
+    
+    asyncio.run(blob_storage_client.set(
+                            f"query/{new_query_id}/output.json",result
+                        ) 
+    ) 
+
+    return f"{result}\n\nStored as {new_query_id}"
