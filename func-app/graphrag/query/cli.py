@@ -487,14 +487,7 @@ def summarize(query_id:str,
     if type(blob_data)!= str:
         return "Invalid query result"
     
-    delimiter="\n__RAW_RESULT__:\n"
-    pdelim=blob_data.find(delimiter)
-    if pdelim==-1:
-        return "Invalid query result"
-
-    query=blob_data[:pdelim]
-
-    raw_json=blob_data[pdelim+len(delimiter):]
+    query,raw_json = split_raw_response(blob_data)
 
     list_json=json.loads(raw_json)
     
@@ -577,4 +570,60 @@ def summarize(query_id:str,
     result = summarizer.summarize(query)
     return result.response
 
+def split_raw_response(data):
+    delimiter="\n__RAW_RESULT__:\n"
+    pdelim=data.find(delimiter)
+    if pdelim==-1:
+        print( "Invalid query result")
+        exit(-1)
 
+    query=data[:pdelim]
+
+    raw_json=data[pdelim+len(delimiter):]
+
+    return query,raw_json
+
+def rrf_scoring(query_ids:str,root_dir:str,k=60):
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, root_dir, None
+    )
+    rrf_scores = {}
+    blob_storage_client = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    
+    query_ids=query_ids.split(',')
+    print('RRF over',query_ids)
+
+    for query_id in query_ids:
+        blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
+        q,raw_json=split_raw_response(blob_data)
+        list_json=json.loads(raw_json)
+        for entity_json in list_json:
+            for text_unit_id in entity_json["text_unit_ids"]:
+                entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
+                if entity_text_unit not in rrf_scores:
+                    rrf_scores[entity_text_unit] = 0
+                rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"])
+
+
+    result=[]
+    for couple in rrf_scores:
+        d=couple.find(":")
+        entity_id = couple[:d]
+        text_unit_id=couple[d+1:]
+        result.append({'entity_id':entity_id,
+                       'text_unit_id:':text_unit_id,
+                       'rank':rrf_scores[couple]})
+        
+
+    result= json.dumps(result)
+
+    new_query_id= uuid.uuid4()
+    
+    asyncio.run(blob_storage_client.set(
+                            f"query/{new_query_id}/output.json",result
+                        ) 
+    ) 
+
+    return f"{result}\n\nStored as {new_query_id}"
