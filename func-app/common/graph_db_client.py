@@ -86,12 +86,21 @@ class GraphDBClient:
             element_count=counts[0]
         return element_count>0
 
+    def get_vertex_ids(self)->set:
+        result=self._client.submit(
+                message=(
+                        "g.V().id()"
+                )
+        )
+        return set([row[0] for row in result])
+
     def write_vertices(self,data: pd.DataFrame, added_vertices: set)->None:
         for row in data.itertuples():
             if row.id not in added_vertices:
                 added_vertices.add(row.id)
                 self._client.submit(
                     message=(
+                        "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
                         "g.addV('entity')"
                         ".property('id', prop_id)"
                         ".property('name', prop_name)"
@@ -101,7 +110,7 @@ class GraphDBClient:
                         ".property('category', prop_partition_key)"
                         ".property(list,'description_embedding',prop_description_embedding)"
                         ".property(list,'graph_embedding',prop_graph_embedding)"
-                        ".property(list,'text_unit_ids',prop_text_unit_ids)"
+                        ".property(list,'text_unit_ids',prop_text_unit_ids))"
                     ),
                     bindings={
                         "prop_id": row.id,
