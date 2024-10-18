@@ -583,11 +583,13 @@ def split_raw_response(data):
 
     return query,raw_json
 
-def rrf_scoring(query_ids:str,root_dir:str,k=60):
+def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
+
     data_dir, root_dir, config = _configure_paths_and_settings(
         None, root_dir, None
     )
     rrf_scores = {}
+    docs={}
     blob_storage_client = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
@@ -602,6 +604,8 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
         for entity_json in list_json:
             for text_unit_id in entity_json["text_unit_ids"]:
                 entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
+                doc_id = entity_json['document_ids']
+                docs[entity_text_unit] = doc_id
                 if entity_text_unit not in rrf_scores:
                     rrf_scores[entity_text_unit] = 0
                 rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"]) #assuming rank is stored as an integer
@@ -614,8 +618,14 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
         text_unit_id=couple[d+1:]
         result.append({'entity_id':entity_id,
                        'text_unit_id:':text_unit_id,
-                       'rank':rrf_scores[couple]})
+                       'rank':rrf_scores[couple],
+                       'document_ids': docs[couple] }
+                      )
         
+
+
+    result.sort(key=lambda x : x['rank'],reverse=True)
+    result=result[:top_k]
 
     result= json.dumps(result)
 
