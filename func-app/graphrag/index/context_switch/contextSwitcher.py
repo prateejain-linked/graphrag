@@ -278,6 +278,7 @@ class ContextSwitcher:
                 graph_db_client.write_edges(final_relationships)
 
         if config.graphdb.enabled:
+            graph_db_client.wait_for_jobs()
             graph_db_client._client.close()
 
     def deactivate(self):

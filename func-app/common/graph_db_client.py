@@ -29,6 +29,7 @@ class GraphDBClient:
             password=token,
             message_serializer=serializer.GraphSONSerializersV2d0(),
         )
+        self.running_jobs = set()
 
     def result_to_df(self,result) -> pd.DataFrame:
         json_data = []
@@ -86,19 +87,11 @@ class GraphDBClient:
             element_count=counts[0]
         return element_count>0
 
-    def get_vertex_ids(self)->set:
-        result=self._client.submit(
-                message=(
-                        "g.V().id()"
-                )
-        )
-        return set([row[0] for row in result])
-
     def write_vertices(self,data: pd.DataFrame, added_vertices: set)->None:
         for row in data.itertuples():
             if row.id not in added_vertices:
                 added_vertices.add(row.id)
-                self._client.submit(
+                rs = self._client.submit(
                     message=(
                         "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
                         "g.addV('entity')"
@@ -124,11 +117,11 @@ class GraphDBClient:
                         "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
                     },
                 )
-
+                self.running_jobs.add(rs)
 
     def write_edges(self,data: pd.DataFrame)->None:
         for row in data.itertuples():
-            self._client.submit(
+            rs = self._client.submit(
                 message=(
                     "g.V().has('name',prop_source_id)"
                     ".addE('connects')"
@@ -160,6 +153,7 @@ class GraphDBClient:
                     "prop_target": row.target,
                 },
             )
+            self.running_jobs.add(rs)
 
     def get_top_related_unique_edges(self, entity_id: str, top: int) -> [dict[str, str]]:
         """Retrieve the top related unique edges for a given entity.
@@ -207,3 +201,13 @@ class GraphDBClient:
                 json_data.append({'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids})
 
         return json_data
+
+    def wait_for_jobs(self):
+        """Wait for all running jobs to complete."""
+        try:
+            for job in self.running_jobs:
+                job.all().result()
+            self.running_jobs.clear()
+        except Exception as e:
+            print(f"Error writing to graph: {e}")
+            raise e
