@@ -6,7 +6,7 @@
 import logging
 import time
 from typing import Any
-
+import os
 import tiktoken
 
 from graphrag.query.context_builder.builders import LocalContextBuilder
@@ -109,8 +109,8 @@ class LocalSearch(BaseSearch):
     def search(
         self,
         query: str,
-        path: int = 0,
         conversation_history: ConversationHistory | None = None,
+        path=0,
         **kwargs,
     ) -> SearchResult:
         """Build local search context that fits a single context window and generate answer for the user question."""
@@ -119,8 +119,8 @@ class LocalSearch(BaseSearch):
         search_prompt = ""
         context_text, context_records = self.context_builder.build_context(
             query=query,
-            path=path,
             conversation_history=conversation_history,
+            path=path,
             **kwargs,
             **self.context_builder_params,
         )
@@ -134,12 +134,16 @@ class LocalSearch(BaseSearch):
                 {"role": "user", "content": query},
             ]
 
-            response = self.llm.generate(
-                messages=search_messages,
-                streaming=True,
-                callbacks=self.callbacks,
-                **self.llm_params,
-            )
+            pt_enabled = os.environ.get("PROTOTYPE")
+            if pt_enabled:
+                response=" <ProtoType env enabled. Not proceeding to LLM> "
+            else:
+                response = self.llm.generate(
+                    messages=search_messages,
+                    streaming=True,
+                    callbacks=self.callbacks,
+                    **self.llm_params,
+                )
 
             return SearchResult(
                 response=response,
@@ -165,7 +169,6 @@ class LocalSearch(BaseSearch):
     def optimized_search(
         self,
         query: str,
-        path: int = 0,
         conversation_history: ConversationHistory | None = None,
         **kwargs,
     ) -> SearchResult:
@@ -174,7 +177,6 @@ class LocalSearch(BaseSearch):
         search_prompt = ""
         context_text, context_records = self.context_builder.build_context(
             query=query,
-            path=path,
             conversation_history=conversation_history,
             is_optimized_search = self.optimized_search,
             **kwargs,
@@ -201,3 +203,57 @@ class LocalSearch(BaseSearch):
                 llm_calls=1,
                 prompt_tokens=num_tokens(search_prompt, self.token_encoder),
             )
+
+
+class Summarizer:
+    def __init__(
+        self,
+        llm: BaseLLM,
+        context_builder:LocalContextBuilder,
+        token_encoder: tiktoken.Encoding | None = None,
+        context_builder_params: dict | None = None,
+        response_type: str = "multiple paragraphs",
+        summarize_prompt:str=LOCAL_SEARCH_SYSTEM_PROMPT, # use same prompt as standard graphrag search
+        llm_params: dict[str, Any] = DEFAULT_LLM_PARAMS
+    ):
+        self.llm = llm
+        self.context_builder=context_builder
+        self.summarize_prompt = summarize_prompt
+        self.response_type = response_type
+        self.callbacks = None
+        self.llm_params = llm_params
+        self.context_builder_params = context_builder_params
+        self.token_encoder=token_encoder
+
+    def summarize(self,query,**kwargs)->str:
+        try:
+            start_time = time.time()
+            context_text, context_records = self.context_builder.build_context(
+                query="", #we do not pass query here
+                **kwargs,
+                **self.context_builder_params,
+            )
+            search_prompt = self.summarize_prompt.format(
+                context_data=context_text, response_type=self.response_type
+            )
+            search_messages = [
+                {"role": "system", "content": search_prompt},
+                {"role": "user", "content": query}, # USER QUERY HERE
+            ]
+            llm_response= self.llm.generate(
+                messages=search_messages,
+                streaming=True,
+                callbacks=self.callbacks,
+                **self.llm_params,
+            )
+
+            return SearchResult(
+                response=llm_response,
+                context_data=context_records,
+                context_text=context_text,
+                completion_time=time.time() - start_time,
+                llm_calls=1,
+                prompt_tokens=num_tokens(search_prompt, self.token_encoder),
+            )
+        except Exception as e:
+            raise e
