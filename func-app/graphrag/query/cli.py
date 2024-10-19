@@ -597,9 +597,10 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
     query_ids=query_ids.split(',')
     print('RRF over',query_ids)
 
+    query='' # we expect the query to be the same for given raw reponses
     for query_id in query_ids:
         blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
-        q,raw_json=split_raw_response(blob_data)
+        query,raw_json=split_raw_response(blob_data) # query should stay the same
         list_json=json.loads(raw_json)
         for entity_json in list_json:
             for text_unit_id in entity_json["text_unit_ids"]:
@@ -627,7 +628,7 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
     result.sort(key=lambda x : x['rank'],reverse=True)
     result=result[:top_k]
 
-    result= json.dumps(result)
+    result= query + "\n__RAW_RESULT__:\n"+ json.dumps(result)
 
     new_query_id= uuid.uuid4()
     
