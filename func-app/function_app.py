@@ -37,21 +37,21 @@ def initialize_watermark_client() -> BlobPipelineStorage:
     watermark_storage_account = BlobPipelineStorage(connection_string=None, container_name=watermark_container_name, storage_account_blob_url=blob_account_url)
 
     return watermark_storage_account
-    
+
 
 @app.function_name('contextpoller')
-@app.timer_trigger(schedule="0 */3 * * * *", arg_name="mytimer", run_on_startup=True) 
+@app.timer_trigger(schedule="0 */1 * * * *", arg_name="mytimer", run_on_startup=True)
 def indexing(mytimer: func.TimerRequest) -> None:
     logging.info('Python HTTP trigger function processed a request.')
-    
+
     input_base_dir=None
     # if "input_base_dir" in req.params:
     #     input_base_dir = req.params['input_base_dir']
     output_base_dir=None
-    
+
     queue_client = initialize_incoming_msg_queue()
     watermark_client = initialize_watermark_client()
-    
+
     targets = find_next_target_index_blob(queue_storage_client=queue_client, watermark_client=watermark_client, caller='context')
     if len(targets) <= 0:
         logging.info("No target to index. Silently skipping the iteration")
@@ -59,7 +59,7 @@ def indexing(mytimer: func.TimerRequest) -> None:
             "No content to polled for the context",
             status_code=200
         )
-    
+
     #file_targets: list[str] = []
     for target in targets:
         file_target = target[1]
@@ -96,21 +96,21 @@ def indexing(mytimer: func.TimerRequest) -> None:
             raise
 
 @app.function_name('contextpollv2')
-@app.route(route="contextpoll", auth_level=func.AuthLevel.FUNCTION) 
+@app.route(route="contextpoll", auth_level=func.AuthLevel.FUNCTION)
 def context_poll(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
-    
+
     input_base_dir=None
     # if "input_base_dir" in req.params:
     #     input_base_dir = req.params['input_base_dir']
-    
+
     output_base_dir=None
     # if "output_base_dir" in req.params:
     #     output_base_dir = req.params['output_base_dir']
-    
+
     queue_client = initialize_incoming_msg_queue()
     watermark_client = initialize_watermark_client()
-    
+
     targets = find_next_target_index_blob(queue_storage_client=queue_client, watermark_client=watermark_client, caller='context')
     if len(targets) <= 0:
         logging.info("No target to index. Silently skipping the iteration")
@@ -118,7 +118,7 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
             "No content to polled for the context",
             status_code=200
         )
-    
+
     #file_targets: list[str] = []
     for target in targets:
         file_target = target[1]
@@ -166,13 +166,13 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
 def context_switch(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
     logging.info("Parameters: "+str(req.params))
-    
+
     if 'req_type' not in req.params:
         return func.HttpResponse(
             "The Request must have req_type parameters passed.",
             status_code=400
         )
-    
+
     req_type: str = req.params['req_type']
     req_type = req_type.lower()
     context_name = req.params['context_name']
@@ -194,12 +194,12 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
                     status_code=400
                 )
             files = content_ids.split(";")
-        
+
             if(req_type == 'create'):
                 content_mgr.initialize(files=files)
             else:
                 content_mgr.update(files=files)
-        
+
         elif req_type == 'switch':
             content_mgr.switch_context_state()
 
@@ -207,7 +207,7 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(
                 f"Unsupported {req_type}",
                 status_code=400
-            )            
+            )
         return func.HttpResponse(
             "Successfully processed the create / initialized request",
             status_code=200
@@ -217,9 +217,9 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             "The request failed to be processed",
             status_code=500
-        )    
+        )
 
 
 def executing_correct_func_app(req: func.HttpRequest, route: str):
     return os.getenv("ENVIRONMENT") == "AZURE" and  os.getenv("APP_NAME")!= route
-            
+

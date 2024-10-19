@@ -20,11 +20,11 @@ class QueueStorageClient:
         self._queue_name = queue_name
         self._max_messages = max_message
         self._queue_client = QueueClient(account_url=account_url, queue_name=queue_name, credential=DefaultAzureCredential(managed_identity_client_id=client_id))
-    
+
     def  poll_messages(self):
-        messages = self._queue_client.receive_messages(max_messages=self._max_messages)
+        messages = self._queue_client.receive_messages(max_messages=self._max_messages, visibility_timeout=600)
 
         return messages
-    
+
     def delete_message(self, message: QueueMessage):
         self._queue_client.delete_message(message=message, pop_receipt=message.pop_receipt)
