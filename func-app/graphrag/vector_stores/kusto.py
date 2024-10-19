@@ -192,7 +192,7 @@ class KustoVectorStore(BaseVectorStore):
             return self.similarity_search_by_vector(query_embedding, k)
         return []
 
-    def get_extracted_entities(self, text: str, text_embedder: TextEmbedder, k: int = 10,
+    def get_extracted_entities(self, text: str, text_embedder: TextEmbedder, k: int = 10, 
                                preselected_entities=[],
                                **kwargs: Any
     ) -> list[Entity]:
@@ -206,7 +206,7 @@ class KustoVectorStore(BaseVectorStore):
             | top {k} by similarity desc
             """
         else:
-
+            
             chosen_ids=", ".join(f"'{id}'" for id in preselected_entities )
             query = f"""
             let query_vector = dynamic({query_embedding});
@@ -337,16 +337,16 @@ class KustoVectorStore(BaseVectorStore):
             return
         command = f".drop table {self.text_units_name} ifexists	"
         self.client.execute(self.database, command)
-
-        pt_enabled = os.environ.get("PROTOTYPE")
-
-        if not pt_enabled:
-            command = f".create table {self.text_units_name} (id: string, short_id:string, \
-                text: string, text_embedding:string, entity_ids: string, relationship_ids: \
-                    string, covariate_ids:string, n_tokens: string, document_ids: string, \
-                        attributes:string )"
-        else:
-            command=f".create table {self.text_units_name} (id: string, short_id:string,document_ids:string)"
+        
+        command = f".create table {self.text_units_name} (id: string, short_id:string, \
+            text: string, text_embedding:string, entity_ids: string, relationship_ids: \
+                string, covariate_ids:string, n_tokens: string, document_ids: string, \
+                    attributes:string )"
+        
+        '''
+        command = f".create table {self.text_units_name} (id: string, text: string,  n_tokens: string,\
+                entity_ids: string, document_ids: string, relationship_ids: string )"
+        '''
 
         self.exe(command)
 
@@ -375,7 +375,6 @@ class KustoVectorStore(BaseVectorStore):
     def setup_docs(self) -> None: #Called by indexer
         command = f".drop table {self.docs_tbl_name} ifexists"
         self.client.execute(self.database, command)
-
         command = f".create table {self.docs_tbl_name} (id: string, in_path:string, \
             out_path: string)"
 
@@ -383,7 +382,6 @@ class KustoVectorStore(BaseVectorStore):
 
     def load_doc_stats(self, rows) -> None: #called by indexer
         df = pd.DataFrame(rows)
-
         ingestion_command = f".ingest inline into table {self.docs_tbl_name} <| {df.to_csv(index=False, header=False)}"
         self.client.execute(self.database, ingestion_command)
 
@@ -399,7 +397,6 @@ class KustoVectorStore(BaseVectorStore):
             id_list=ast.literal_eval(e.text_unit_ids)
             unit_ids.extend([id for id in id_list])
         return self.retrieve_text_units_by_id(unit_ids)
-
     def retrieve_text_units_by_id(self,unit_ids):
         unit_ids_str=", ".join(f"'{id}'" for id in unit_ids )
 
@@ -427,7 +424,7 @@ class KustoVectorStore(BaseVectorStore):
             cite_index+=1
 
         return res
-
+    
     def get_extracted_reports(
         self, community_ids: list[int], **kwargs: Any
     ) -> list[CommunityReport]:

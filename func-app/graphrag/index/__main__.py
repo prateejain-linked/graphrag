@@ -100,7 +100,8 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
+    print("TEST MAIN")
+    exit(0)
     if args.overlay_defaults and not args.config:
         parser.error("--overlay-defaults requires --config")
 

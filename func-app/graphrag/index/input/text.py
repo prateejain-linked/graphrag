@@ -41,6 +41,11 @@ async def load(
         new_item["tag"] = path
         new_item["title"] = str(Path(path).name)
         return new_item
+    
+
+
+
+    
     base_dir = config.base_dir
     if config.type == "file":
         #base dir is already being added to root dir in case of type file.
