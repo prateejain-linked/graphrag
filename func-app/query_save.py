@@ -9,10 +9,11 @@ import os
 
 from graphrag.query.cli import run_local_search, summarize,rrf_scoring
 from time import sleep
-app = func.FunctionApp()
 
-@app.function_name('query')
-@app.route(route="query", auth_level=func.AuthLevel.FUNCTION)
+query_functions = func.Blueprint()
+
+@query_functions.function_name('query')
+@query_functions.route(route="query", auth_level=func.AuthLevel.FUNCTION)
 def query(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
     logging.info("Parameters: "+str(req.params))
@@ -29,8 +30,8 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Query start")
     result=run_local_search(
                 None,
-                None,
-                '.\\exe',
+                data_dir="",
+                root_dir="settings",
                 community_level=2,
                 response_type="",
                 context_id=context_id,
@@ -46,8 +47,8 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
-@app.function_name('query&save')
-@app.route(route="query_save", auth_level=func.AuthLevel.FUNCTION)
+@query_functions.function_name('query&save')
+@query_functions.route(route="query_save", auth_level=func.AuthLevel.FUNCTION)
 def query(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
     logging.info("Parameters: "+str(req.params))
@@ -81,8 +82,8 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200
     )
 
-@app.function_name('summarization')
-@app.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
+@query_functions.function_name('summarization')
+@query_functions.route(route="summarize", auth_level=func.AuthLevel.FUNCTION)
 def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
 
     query_id = req.params['query_id']
@@ -93,8 +94,8 @@ def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
-@app.function_name('rrf_app')
-@app.route(route="rrf", auth_level=func.AuthLevel.FUNCTION)
+@query_functions.function_name('rrf_app')
+@query_functions.route(route="rrf", auth_level=func.AuthLevel.FUNCTION)
 def rrf(req: func.HttpRequest) -> func.HttpResponse:
 
     query_ids = req.params['query_ids']

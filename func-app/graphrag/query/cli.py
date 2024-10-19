@@ -176,7 +176,7 @@ def cs_search(
     ):
 
     """Run a local search with the given query."""
-    data_dir, root_dir, config = _configure_paths_and_settings(
+    _, root_dir, config = _configure_paths_and_settings(
         data_dir, root_dir, config_dir
     )
 
