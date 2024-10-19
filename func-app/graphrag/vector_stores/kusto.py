@@ -66,7 +66,8 @@ class KustoVectorStore(BaseVectorStore):
         elif(env == "DEVELOPMENT"):
             #kcsb = KustoConnectionStringBuilder.with_aad_device_authentication(str(cluster))
             logging.info("KUSTO DEVELPMENT MODE")
-            kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(str(cluster))
+            #kcsb = KustoConnectionStringBuilder.with_interactive_login(str(cluster))
+            kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(cluster)
         else:
             kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
             str(cluster), str(client_id), str(client_secret), str(authority_id))
@@ -337,16 +338,16 @@ class KustoVectorStore(BaseVectorStore):
             return
         command = f".drop table {self.text_units_name} ifexists	"
         self.client.execute(self.database, command)
-        
-        command = f".create table {self.text_units_name} (id: string, short_id:string, \
-            text: string, text_embedding:string, entity_ids: string, relationship_ids: \
-                string, covariate_ids:string, n_tokens: string, document_ids: string, \
-                    attributes:string )"
-        
-        '''
-        command = f".create table {self.text_units_name} (id: string, text: string,  n_tokens: string,\
-                entity_ids: string, document_ids: string, relationship_ids: string )"
-        '''
+
+        pt_enabled = os.environ.get("PROTOTYPE")
+
+        if not pt_enabled:
+            command = f".create table {self.text_units_name} (id: string, short_id:string, \
+                text: string, text_embedding:string, entity_ids: string, relationship_ids: \
+                    string, covariate_ids:string, n_tokens: string, document_ids: string, \
+                        attributes:string )"
+        else:
+            command=f".create table {self.text_units_name} (id: string, short_id:string,document_ids:string)"
 
         self.exe(command)
 
