@@ -10,8 +10,6 @@ import os
 from pathlib import Path
 from typing import cast
 from io import BytesIO
-import uuid
-import uuid
 
 from datashaper import VerbCallbacks
 from graphrag.common.progress.rich import RichProgressReporter
@@ -26,6 +24,8 @@ from graphrag.config import (
     create_graphrag_config,
     GraphRagConfig,
 )
+
+
 from graphrag.common.progress import PrintProgressReporter
 from graphrag.index.verbs.entities.extraction.strategies.graph_intelligence.run_graph_intelligence import run_gi
 from graphrag.index.verbs.entities.extraction.strategies.typing import Document
@@ -37,7 +37,7 @@ from graphrag.vector_stores import VectorStoreFactory, VectorStoreType
 from graphrag.vector_stores.base import BaseVectorStore
 from graphrag.vector_stores.lancedb import LanceDBVectorStore
 from graphrag.vector_stores.kusto import KustoVectorStore
-from .factories import get_global_search_engine, get_local_search_engine, get_summarizer
+from .factories import get_global_search_engine, get_local_search_engine,get_summarizer
 from .indexer_adapters import (
     read_indexer_covariates,
     read_indexer_entities,
@@ -48,6 +48,9 @@ from .indexer_adapters import (
 )
 
 from common.graph_db_client import GraphDBClient
+import json
+import ast
+import uuid
 
 reporter = PrintProgressReporter("")
 
@@ -73,6 +76,7 @@ def __get_embedding_description_store(
     config_args.update({"vector_name": vector_name})
     config_args.update({"reports_name": f"reports_{context_id}" if context_id else "reports"})
     config_args.update({"text_units_name": f"text_units_{context_id}"})
+    config_args.update({"docs_tbl_name": f"docs_{context_id}"})
 
     description_embedding_store = VectorStoreFactory.get_vector_store(
         vector_store_type=vector_store_type, kwargs=config_args
@@ -157,7 +161,7 @@ def run_global_search(
     reporter.success(f"Global Search Response: {result.response}")
     return result.response
 
-def run_local_search(
+def cs_search(
     config_dir: str | None,
     data_dir: str | None,
     root_dir: str | None,
@@ -167,8 +171,10 @@ def run_local_search(
     query: str,
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
-    path: int = 0
+    path=0,
+    save_result=False
     ):
+
     """Run a local search with the given query."""
     data_dir, root_dir, config = _configure_paths_and_settings(
         data_dir, root_dir, config_dir
@@ -186,17 +192,6 @@ def run_local_search(
     covariates=[]
     reports=[]
     final_relationships=[]
-
-    if(config.storage.type == StorageType.blob):
-        if(config.output_storage.container_name is not None):
-             output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.output_storage.connection_string,
-                                                                          container_name=config.output_storage.container_name,
-                                                                          storage_account_blob_url=config.output_storage.storage_account_blob_url)
-        else:
-            ValueError("Storage type is Blob but container name is invalid")
-    elif(config.storage.type == StorageType.file):
-        output_storage_client: PipelineStorage = FilePipelineStorage(config.root_dir)
-
 
 
     ##### LEGACY #######################
@@ -285,66 +280,104 @@ def run_local_search(
         use_kusto_community_reports=use_kusto_community_reports,
     )
 
-    query_id= uuid.uuid4()
+    
     if optimized_search:
-        result = search_engine.optimized_search(query=query, path=path)
+        result = search_engine.optimized_search(query=query)
     else:
-        result = search_engine.search(query=query, path=path)
-    result_df = format_output(result, query_id, path, True) #remove description title from entities and relationships
-    asyncio.run(output_storage_client.set(f"query/{query_id}/output.json", result_df.to_json(orient="records"))) #it shows as error in editor but not an error.
-    result.response += f"\n query_id: {query_id}"
-    reporter.success(f"Local Search Response: {result.response}")
-    return result.response
+        result = search_engine.search(query=query,path=path)
 
-def summarize(query_id:str,artifacts_path:str)->str:
-    data_dir, root_dir, config = _configure_paths_and_settings(
-        None, "settings", None
-    )
-    output_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=config.storage.connection_string,
+    
+
+    pt_enabled = os.environ.get("PROTOTYPE")
+    local_test = not pt_enabled
+
+    if local_test:
+        return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
+    
+    raw_result=query + "\n__RAW_RESULT__:\n"+ json.dumps(result.context_data['raw_result'])
+    
+    if save_result:
+        query_id= uuid.uuid4()
+        blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
-    blob_data = asyncio.run(output_storage_client.get(f"query/{query_id}/output.json"))
-    list_json=json.loads(blob_data)
-    total_text_units=set()
-    concat_result=""
-    for dict_json in list_json:
-        list_text_units=ast.literal_eval(dict_json["text_unit_ids"])
-        for text_unit in list_text_units:
-            total_text_units.add(text_unit)
-    text_df=read_paraquet_file(output_storage_client,f"{artifacts_path}/create_base_text_units.parquet")
-    for text_unit in total_text_units:
-        concat_result+=text_df.loc[text_df['id']==text_unit]['chunk'][0]
-    summarizer = get_summarizer(config)
-    return summarizer.summarize(concat_result)
+        asyncio.run(blob_storage_client.set(
+                            f"query/{query_id}/output.json",raw_result
+                        ) 
+                    ) 
+        return str(query_id)
+    
+    return raw_result
 
-def format_output(result, query_id, path=0, removePII: bool = False)-> pd.DataFrame:
-    if path == 1:
-        return result.context_data["sources"]
 
-    entities = result.context_data["entities"]
-    relationships = result.context_data["relationships"]
-    relationships["target"]=relationships["target"].astype(str)
-    entities = entities.rename(columns={'id': 'entity_id'})
-    if remove_PII:
-        if "entity" in entities.columns:
-            entities = entities.drop(["entity"], axis=1)
-        if "description" in entities.columns:
-            entities = entities.drop(["description"], axis=1)
-        if "description" in relationships.columns:
-            relationships = relationships.drop(["description"], axis=1)
-    source_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='source', how='left', suffixes=('', '_source'))
-    target_merged = pd.merge(entities, relationships, left_on='entity_id', right_on='target', how='left', suffixes=('', '_target'))
-    combined_df = pd.concat([source_merged, target_merged], ignore_index=True)
-    grouped_relationships = combined_df.groupby('entity_id').apply(
-        lambda x: x[['id', 'source', 'target', 'in_context', 'rank']].dropna().to_dict('records')
-    ).reset_index(name='relationships')
-    result_df = pd.merge(entities, grouped_relationships, on='entity_id', how='left')
-    result_df = result_df.rename(columns={'entity_id': 'id'})
-    return result_df
 
-def remove_PII(result: pd.DataFrame) -> pd.DataFrame:
-    result.drop(["description","title"], axis = 1) #drop columns
-    return result
+def path1(
+    config_dir: str | None,
+    data_dir: str | None,
+    root_dir: str | None,
+    community_level: int,
+    response_type: str,
+    context_id: str,
+    query: str,
+    optimized_search: bool = False,
+    use_kusto_community_reports: bool = False,
+    ):
+    ValueError("Not implemented")
+
+def path2(
+    config_dir: str | None,
+    data_dir: str | None,
+    root_dir: str | None,
+    community_level: int,
+    response_type: str,
+    context_id: str,
+    query: str,
+    optimized_search: bool = False,
+    use_kusto_community_reports: bool = False,
+    ):
+    """Path 2
+    Find all the emails sent to trader by Tim Belden
+    a. Query -> LLM -> Entity Extracted -> 5 entities -> Set A [TimBelden1]
+    b. Query -> LLM -> Embeddings -> Y [x1..... Xn]
+    c. Run the query on Kusto for embedding Y [x1.....xn] for entitYid in [TimBelden1]
+    4. Get the text units and get the response"""
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        data_dir, root_dir, config_dir
+    )
+
+    
+    exit(0)
+
+def path3(
+    config_dir: str | None,
+    data_dir: str | None,
+    root_dir: str | None,
+    community_level: int,
+    response_type: str,
+    context_id: str,
+    query: str,
+    optimized_search: bool = False,
+    use_kusto_community_reports: bool = False,
+    ):
+    ValueError("Not implemented")
+
+
+def run_local_search(
+    config_dir: str | None,
+    data_dir: str | None,
+    root_dir: str | None,
+    community_level: int,
+    response_type: str,
+    context_id: str,
+    query: str,
+    optimized_search: bool = False,
+    use_kusto_community_reports: bool = False,
+    path = 0,
+    save_result=False):
+    """Run a local search with the given query."""
+    
+    return cs_search(config_dir, data_dir, root_dir, community_level, response_type, context_id, 
+                     query, optimized_search, use_kusto_community_reports, path=path,save_result=save_result)
 
 def blob_exists(container_client, blob_name):
     blob_client = container_client.get_blob_client(blob_name)
@@ -373,7 +406,7 @@ def _configure_paths_and_settings(
         msg = "Either data_dir or root_dir must be provided."
         raise ValueError(msg)
     if data_dir is None:
-        data_dir = root_dir # _infer_data_dir(cast(str, root_dir))
+        data_dir = _infer_data_dir(cast(str, root_dir))
     config = _create_graphrag_config(root_dir, config_dir)
     return data_dir, root_dir, config
 
@@ -433,3 +466,168 @@ def _read_config_parameters(root: str, config: str | None):
 
     reporter.info("Reading settings from environment variables")
     return create_graphrag_config(root_dir=root)
+
+
+def summarize(query_id:str,
+              root_dir,
+              response_type="multiple paragraphs",
+              community_level=2)->str:
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, root_dir, None
+    )
+    blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    
+    index_storage_client = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+
+
+    blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
+
+    if type(blob_data)!= str:
+        return "Invalid query result"
+    
+    query,raw_json = split_raw_response(blob_data)
+
+    list_json=json.loads(raw_json)
+    
+    blob_history={
+        'loaded_entities':set(),
+        'loaded_relationships':set(),
+        'loaded_text_units':set()
+    }
+    
+    entities=[]
+    relationships=[]
+    text_units=[]
+
+
+    for dict_json in list_json:
+        #one entity per json row
+        # Entity -> text unit list, relationship list , document list [one entry]
+
+        entity_id = dict_json['entity_id']
+        
+
+        doc = dict_json["document_ids"] # Exactly ONE doc for each list of text units
+        if len(doc) != 1: 
+            return "Invalid query file. Document ID configuration not supported"
+        doc=doc[0]
+
+
+        #list_relationships=dict_json.get("relationships",[])
+        list_text_units=dict_json["text_unit_ids"]
+
+        #LOAD everything we need from this document
+        artifacts_path = f'artifacts/{doc}/version=0'
+
+        if entity_id not in blob_history['loaded_entities']:
+            blob_history['loaded_entities'].add(entity_id)
+            
+            _nodes = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_nodes.parquet")
+            _entities_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_entities.parquet")
+            _entities= _entities_df[_entities_df['id'].isin([entity_id])] #isolate the target
+            entities += read_indexer_entities(_nodes, _entities, community_level) #append
+        
+        #########################################################
+
+        # We do not have relationship text units
+        # relationships not supported at summarization stage
+        '''
+        artifacts_path='unknown'
+        rels_to_load=[]
+        for r in list_relationships:
+            if r['id'] not in blob_history['loaded_relationships']:
+                blob_history['loaded_relationships'].add(r['id'])
+                rels_to_load.append(r['id'])
+
+        if rels_to_load != []:
+            _relationships_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_relationships.parquet")
+            _relationships = _relationships_df[_relationships_df['id'].isin(rels_to_load)]
+            relationships += read_indexer_relationships(_relationships)
+        '''
+        ##########################################################
+
+        units_to_load = []
+        for u in list_text_units:
+            if u not in blob_history["loaded_text_units"]:
+                blob_history["loaded_text_units"].add(u)
+                units_to_load.append(u)
+        
+        if units_to_load != []:
+            _text_units_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_text_units.parquet")
+            _text_units = _text_units_df[_text_units_df['id'].isin(units_to_load)]
+            if len(_text_units)!=len(units_to_load):
+                return "Invlaid parquet file"
+            text_units += read_indexer_text_units(_text_units)
+    
+    summarizer = get_summarizer(
+        config=config,
+        response_type=response_type,
+        external_entities=entities,
+        external_relationships=relationships,
+        external_text_units=text_units
+    )
+    result = summarizer.summarize(query)
+    return result.response
+
+
+def split_raw_response(data):
+    delimiter="\n__RAW_RESULT__:\n"
+    pdelim=data.find(delimiter)
+    if pdelim==-1:
+        print( "Invalid query result")
+        exit(-1)
+
+    query=data[:pdelim]
+
+    raw_json=data[pdelim+len(delimiter):]
+
+    return query,raw_json
+
+def rrf_scoring(query_ids:str,root_dir:str,k=60):
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        None, root_dir, None
+    )
+    rrf_scores = {}
+    blob_storage_client = BlobPipelineStorage(connection_string=None,
+                                                                container_name=config.storage.container_name,
+                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+    
+    query_ids=query_ids.split(',')
+    print('RRF over',query_ids)
+
+    for query_id in query_ids:
+        blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
+        q,raw_json=split_raw_response(blob_data)
+        list_json=json.loads(raw_json)
+        for entity_json in list_json:
+            for text_unit_id in entity_json["text_unit_ids"]:
+                entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
+                if entity_text_unit not in rrf_scores:
+                    rrf_scores[entity_text_unit] = 0
+                rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"]) #assuming rank is stored as an integer
+
+
+    result=[]
+    for couple in rrf_scores:
+        d=couple.find(":")
+        entity_id = couple[:d]
+        text_unit_id=couple[d+1:]
+        result.append({'entity_id':entity_id,
+                       'text_unit_id:':text_unit_id,
+                       'rank':rrf_scores[couple]})
+        
+
+    result= json.dumps(result)
+
+    new_query_id= uuid.uuid4()
+    
+    asyncio.run(blob_storage_client.set(
+                            f"query/{new_query_id}/output.json",result
+                        ) 
+    ) 
+
+    return f"{result}\n\nStored as {new_query_id}"

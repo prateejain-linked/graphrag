@@ -11,6 +11,7 @@ def gen_sha256_hash(item: dict[str, Any], hashcode: Iterable[str]):
     hashed = "".join([str(item[column]) for column in hashcode])
     return f"{sha256(hashed.encode('utf-8'), usedforsecurity=False).hexdigest()}"
 
+ 
 
 def gen_md5_hash(item: dict[str, Any], hashcode: Iterable[str]):
     """Generate an md5 hash."""
