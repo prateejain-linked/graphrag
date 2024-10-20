@@ -156,3 +156,8 @@ class GraphRagConfig(LLMConfig):
         description="The parameters to use graphdb.", default=[]
     )
     """The parameters to use graphdb."""
+
+    output_storage: StorageConfig = Field(
+        description="The storage configuration.", default=StorageConfig()
+    )
+    """The storage configuration."""

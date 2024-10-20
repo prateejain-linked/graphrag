@@ -31,6 +31,10 @@ async_mode: threaded # or asyncio
 embeddings:
   ## parallelization: override the global parallelization settings for embeddings
   async_mode: threaded # or asyncio
+  vector_store:
+    type: kusto
+    cluster: https://cstorehotindex.eastus2.kusto.windows.net
+    database: enron_prototype_hot_store
   llm:
     api_key: ${GRAPHRAG_API_KEY}
     type: azure_openai_embedding #openai_embedding # or azure_openai_embedding
@@ -153,3 +157,10 @@ global_search:
   # map_max_tokens: 1000
   # reduce_max_tokens: 2000
   # concurrency: 32
+
+output_storage:
+  type: blob # or blob
+  base_dir: "artifacts"
+  storage_account_blob_url: "https://indexedoutputartifacts.blob.core.windows.net"
+  # connection_string: <azure_blob_storage_connection_string>
+  container_name: queryresult
