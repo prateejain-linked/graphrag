@@ -69,7 +69,7 @@ class KustoVectorStore(BaseVectorStore):
             #kcsb = KustoConnectionStringBuilder.with_interactive_login(str(cluster))
             kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(cluster)
         else:
-             kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
+            kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
             str(cluster), str(client_id), str(client_secret), str(authority_id))
 
         self.client = KustoClient(kcsb)
@@ -245,7 +245,9 @@ class KustoVectorStore(BaseVectorStore):
         self.client.execute(self.database,f".drop table {self.reports_name} ifexists")
 
     def setup_entities(self) -> None:
-        command = f".drop table {self.collection_name} ifexists"
+        if self._check_if_table_exists(self.collection_name):
+            return
+        command = f".drop table {self.collection_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -308,6 +310,8 @@ class KustoVectorStore(BaseVectorStore):
 
 
     def setup_reports(self) -> None:
+        # if self._check_if_table_exists(self.reports_name):
+        #     return
         command = f".drop table {self.reports_name} ifexists"
         self.client.execute(self.database, command)
         command = f".create table {self.reports_name} (id: string, short_id: string, title: string, community_id: string, summary: string, full_content: string, rank: real, summary_embedding: dynamic, full_content_embedding: dynamic, attributes: dynamic)"
@@ -330,7 +334,9 @@ class KustoVectorStore(BaseVectorStore):
         self.client.execute(self.database, ingestion_command)
 
     def setup_text_units(self) -> None:
-        command = f".drop table {self.text_units_name} ifexists"
+        if self._check_if_table_exists(self.text_units_name):
+            return
+        command = f".drop table {self.text_units_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -448,3 +454,13 @@ class KustoVectorStore(BaseVectorStore):
                 attributes=row["attributes"],
             ) for _, row in df.iterrows()
         ]
+
+    def _check_if_table_exists(self, table_name: str) -> bool:
+        try:
+            command = f".show tables | where TableName == '{table_name}'"
+            response = self.client.execute(self.database, command)
+            logging.info(f"The table {table_name} exists status: {str(len(response.primary_results))}")
+            return response.primary_results[0].rows_count > 0
+        except Exception as ex:
+            logging.error(ex)
+            raise
