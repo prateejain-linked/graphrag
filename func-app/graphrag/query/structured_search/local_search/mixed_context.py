@@ -73,14 +73,12 @@ class LocalSearchMixedContext(LocalContextBuilder):
         covariates: dict[str, list[Covariate]] | None = None,
         token_encoder: tiktoken.Encoding | None = None,
         embedding_vectorstore_key: str = EntityVectorStoreKey.ID,
-        is_optimized_search: bool = False,
         use_kusto_community_reports: bool = False,
         config: GraphRagConfig | None = None,
         context_id:str = None,
         ext_entities=[],
         ext_relationships=[],
         ext_text_units=[],
-        
     ):
         if community_reports is None:
             community_reports = []
@@ -103,7 +101,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
         self.text_embedder = text_embedder
         self.token_encoder = token_encoder
         self.embedding_vectorstore_key = embedding_vectorstore_key
-        self.is_optimized_search = is_optimized_search
         self.use_kusto_community_reports = use_kusto_community_reports
         self.config = config
         self.context_id = context_id
@@ -119,7 +116,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         self,
         query: str,
         conversation_history: ConversationHistory | None = None,
-        path=0,
+        path : int = 0,
         include_entity_names: list[str] | None = None,
         exclude_entity_names: list[str] | None = None,
         conversation_history_max_turns: int | None = 5,
@@ -157,7 +154,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 "The sum of community_prop and text_unit_prop should not exceed 1."
             )
             raise ValueError(value_error)
-
         # map user query to entities
         # if there is conversation history, attached the previous user questions to the current query
         if conversation_history:
@@ -249,7 +245,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
 
             ################## Load  graph data
-
             if self.config.graphdb.enabled:
                 graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
             else:
@@ -257,7 +252,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             graph_search_entities=[]
 
-            if graphdb_client and path in (0,3):
+            if graphdb_client:
                 # Define entities
                 for e in selected_entities:
                     graph_search_entities.append(e.id)
@@ -267,9 +262,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 for e in graph_search_entities:
                     if e not in entity_to_related_entities:
                         entity_to_related_entities[e] = graphdb_client.get_top_related_unique_edges(e, top_k_relationships) 
-
-
-                print("Related entities: ", entity_to_related_entities)
                 
                 # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
                 # THIS PART REPLACES graphdb operation in get_[in/out]network_relationship
@@ -292,7 +284,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
                         relationship.id: relationship for relationship in relationships
                     }
 
-
                 if self.relationships=={}:
                     #create one default relationship to be handled in build_relationship_context
                     rel_list=[]
@@ -300,14 +291,12 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     rel_list.append(Relationship("00000","1","src","target",description="decr"))
                     relationships=rel_list
                     self.relationships = {
-                    relationship.id: relationship for relationship in relationships
+                        relationship.id: relationship for relationship in relationships
                     }
-
             else:
-                print("No graphdb, cannot add relationship context")
+                logging.warn("No graphdb, cannot add relationship context")
             
             ################### End of load graph #########################
-
         else:
             ### Passed external entities
             selected_entities=ext_entities
@@ -321,26 +310,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         final_context = list[str]()
         final_context_data = dict[str, pd.DataFrame]()
 
-        if conversation_history:
-            # build conversation history context
-            (
-                conversation_history_context,
-                conversation_history_context_data,
-            ) = conversation_history.build_context(
-                include_user_turns_only=conversation_history_user_turns_only,
-                max_qa_turns=conversation_history_max_turns,
-                column_delimiter=column_delimiter,
-                max_tokens=max_tokens,
-                recency_bias=False,
-            )
-            if conversation_history_context.strip() != "":
-                final_context.append(conversation_history_context)
-                final_context_data = conversation_history_context_data
-                max_tokens = max_tokens - num_tokens(
-                    conversation_history_context, self.token_encoder
-                )
-
-        if not is_optimized_search:
+        if is_optimized_search is False:
             community_tokens = max(int(max_tokens * community_prop), 0)
             community_context, community_context_data = self._build_community_context(
                 selected_entities=selected_entities,
@@ -375,7 +345,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
         if local_context.strip() != "":
             final_context.append(str(local_context))
             final_context_data = {**final_context_data, **local_context_data}
-        if not self.is_optimized_search:
+
+        if is_optimized_search is False:
             # build text unit context
             text_unit_tokens = max(int(max_tokens * text_unit_prop), 0)
 
@@ -399,21 +370,19 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 final_context.append(text_unit_context)
                 final_context_data = {**final_context_data, **text_unit_context_data}
     
-        ############### get doc ids
-        
+        ############### get doc ids  
         if ext_entities == []:
-
             #prepare raw report
-
             raw_result=[]
-
-            for e in selected_entities:
+            for selected_entity in selected_entities:
                 row={ }
-                row['entity_id']=e.id
-                row['rank']=e.rank
-                
+                row['entity_id']=selected_entity.id
+                row['rank']=selected_entity.rank
                 r_lines=[]
-                for r in entity_to_related_entities[e.id]: 
+                target_entity = None
+                if e.id in entity_to_related_entities:
+                    target_entity = entity_to_related_entities[e.id] 
+                for r in target_entity: 
                     r_line={}                  
                     r_line['id']=r['id']
                     r_line['source']=r['source_id']
@@ -443,11 +412,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 raw_result.append(row)
 
             final_context_data['raw_result'] = raw_result
-
             
             # success gauge
             target_textunits=[ ]
-
             uc=0
             for u in target_textunits:
                 if u in self.text_units_kusto:
@@ -455,13 +422,11 @@ class LocalSearchMixedContext(LocalContextBuilder):
             
             local_suc = uc/len(self.text_units_kusto)
             ref_suc=uc/len(target_textunits)
-            ref_suc=int(found)
+            ref_suc=1
             final_context_data['suc']=( f"\n\tQuery local success rate: {local_suc*100}%"
                                         f"\n\tQuery reference success rate: {ref_suc*100}%"
                                         )
-            
         #else: the caller is summarize not query
-
 
         return ("\n\n".join(final_context), final_context_data)
 

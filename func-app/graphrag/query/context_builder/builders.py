@@ -30,6 +30,7 @@ class LocalContextBuilder(ABC):
         self,
         query: str,
         conversation_history: ConversationHistory | None = None,
+        is_optimized_search: bool = False,
         **kwargs,
     ) -> tuple[str | list[str], dict[str, pd.DataFrame]]:
         """Build the context for the local search mode."""
