@@ -52,15 +52,13 @@ def get_llm(config: GraphRagConfig) -> ChatOpenAI:
     print(f"creating llm client with {llm_debug_info}")  # noqa T201
     creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
                                      exclude_interactive_browser_credential = False)
+    azure_ad_token_provider = None
+    if is_azure_client and not config.llm.api_key:
+        azure_ad_token_provider = get_bearer_token_provider(creds, cognitive_services_endpoint)
+
     return ChatOpenAI(
         api_key=config.llm.api_key,
-        azure_ad_token_provider=(
-            get_bearer_token_provider(
-                creds, cognitive_services_endpoint
-            )
-            if is_azure_client and not config.llm.api_key
-            else None
-        ),
+        azure_ad_token_provider=azure_ad_token_provider,
         api_base=config.llm.api_base,
         organization=config.llm.organization,
         model=config.llm.model,
@@ -86,15 +84,13 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
     print(f"creating embedding llm client with {llm_debug_info}")  # noqa T201
     creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
                                      exclude_interactive_browser_credential = False)
+    azure_ad_token_provider = None
+    if is_azure_client and not config.llm.api_key:
+        azure_ad_token_provider = get_bearer_token_provider(creds, cognitive_services_endpoint)
+
     return OpenAIEmbedding(
         api_key=config.embeddings.llm.api_key,
-        azure_ad_token_provider=(
-            get_bearer_token_provider(
-                creds, cognitive_services_endpoint
-            )
-            if is_azure_client and not config.embeddings.llm.api_key
-            else None
-        ),
+        azure_ad_token_provider=azure_ad_token_provider,
         api_base=config.embeddings.llm.api_base,
         organization=config.llm.organization,
         api_type=OpenaiApiType.AzureOpenAI if is_azure_client else OpenaiApiType.OpenAI,

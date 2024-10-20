@@ -36,7 +36,7 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
                 response_type="",
                 context_id=context_id,
                 query=query,
-                optimized_search=False,
+                optimized_search=True,
                 use_kusto_community_reports=False,
                 path=int(path),
             )

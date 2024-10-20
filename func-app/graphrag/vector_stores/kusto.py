@@ -223,18 +223,18 @@ class KustoVectorStore(BaseVectorStore):
 
         return [
             Entity(
-                id=row["id"],
-                title=row["title"],
-                type=row["type"],
-                description=row["description"],
-                graph_embedding=row["graph_embedding"],
-                text_unit_ids=row["text_unit_ids"],
-                description_embedding=row["description_embedding"],
+                id=row.get('id', default=None),
+                title=row.get('title', default=None),
+                type=row.get('type', default=None),
+                description=row.get('description', default=None),
+                graph_embedding=row.get('graph_embedding', default=None),
+                text_unit_ids=row.get('text_unit_ids', default=None),
+                description_embedding=row.get('description_embedding', default=None),
                 short_id="",
-                community_ids=row["community_ids"],
-                document_ids=row["document_ids"],
-                rank=row["rank"],
-                attributes=row["attributes"],
+                community_ids=row.get('community_ids', default=None),
+                document_ids=row.get('document_ids', default=None),
+                rank=row.get('rank', default=None),
+                attributes=row.get('attributes', default=None),
                 #score= 1 + float(row["similarity"]), #score not in Entity currently
             ) for _, row in df.iterrows()
         ]
