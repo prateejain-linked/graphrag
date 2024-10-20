@@ -178,7 +178,7 @@ class LocalSearch(BaseSearch):
         context_text, context_records = self.context_builder.build_context(
             query=query,
             conversation_history=conversation_history,
-            is_optimized_search = self.optimized_search,
+            is_optimized_search = True,
             **kwargs,
             **self.context_builder_params,
         )

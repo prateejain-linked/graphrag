@@ -248,7 +248,6 @@ def cs_search(
         )
         text_units=read_indexer_text_units(final_text_units)
 
-
     ########################################################################################
 
     if use_kusto_community_reports:
@@ -283,10 +282,9 @@ def cs_search(
     else:
         result = search_engine.search(query=query,path=path)
 
-    pt_enabled = os.environ.get("PROTOTYPE")
-    local_test = not pt_enabled
+    pt_enabled = (os.environ.get("PROTOTYPE", default = "False")).lower() == "True"
 
-    if local_test:
+    if pt_enabled is True:
         return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
     
     raw_result=query + "\n__RAW_RESULT__:\n"+ json.dumps(result.context_data['raw_result'])

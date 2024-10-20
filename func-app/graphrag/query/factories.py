@@ -133,7 +133,6 @@ def get_local_search_engine(
             embedding_vectorstore_key=EntityVectorStoreKey.ID,  # if the vectorstore uses entity title as ids, set this to EntityVectorStoreKey.TITLE
             text_embedder=text_embedder,
             token_encoder=token_encoder,
-            is_optimized_search= is_optimized_search,
             use_kusto_community_reports=use_kusto_community_reports,
             config=config,
             context_id=context_id,

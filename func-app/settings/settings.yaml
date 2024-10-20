@@ -52,7 +52,15 @@ embeddings:
     # batch_size: 16 # the number of documents to send in a single request
     # batch_max_tokens: 8191 # the maximum number of tokens to send in a single request
     # target: required # or optional
-  
+
+graphdb:
+  enabled: true
+  account_name: "graphdbhotstoreindexv2"
+  gremlin_url: "wss://graphdbhotstoreindexv2.gremlin.cosmos.azure.com:443/"
+  cosmos_url: "https://graphdbhotstoreindexv2.documents.azure.com:443/"
+  username: "/dbs/entitygraph/colls/graphentities"
+  account_key: ${COSMOS_ACCOUNT_KEY}
+
 chunks:
   size: 500
   overlap: 100
