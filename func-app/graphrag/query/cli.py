@@ -193,9 +193,7 @@ def cs_search(
     reports=[]
     final_relationships=[]
 
-
     ##### LEGACY #######################
-
     if vector_store_type == VectorStoreType.LanceDB:
         # for the POC purpose input artifacts blob, output artifacts blob and input query blob storage are going to same.
         if(config.storage.type == StorageType.memory):
@@ -280,13 +278,10 @@ def cs_search(
         use_kusto_community_reports=use_kusto_community_reports,
     )
 
-    
     if optimized_search:
         result = search_engine.optimized_search(query=query)
     else:
         result = search_engine.search(query=query,path=path)
-
-    
 
     pt_enabled = os.environ.get("PROTOTYPE")
     local_test = not pt_enabled

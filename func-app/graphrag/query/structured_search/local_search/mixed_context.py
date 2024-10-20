@@ -176,9 +176,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         ext_text_units=self.ext_text_units
 
         if ext_entities==[]:
-            
             ############### LLM-included flow ###############
-
             # ENTITY ISOLATION
             if path in (2,3):
                 args = {}
@@ -228,7 +226,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
                 preselected_entities=[entity_to_id(entity['name']) for entity in q_entities]
                 '''
-
                 preselected_entities=[generate_entity_id(entity['name']) for entity in q_entities]
 
             selected_entities = map_query_to_entities(
@@ -244,9 +241,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     preselected_entities=preselected_entities
             )
 
-
             print("Selected entities titles: ", [entity.title for entity in selected_entities])
-
 
             if selected_entities==[]:
                 print("Search returned empty set. Check your query/path")
@@ -259,7 +254,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 graphdb_client=GraphDBClient(self.config.graphdb,self.context_id)# if (self.config.graphdb and self.config.graphdb.enabled) else None
             else:
                 graphdb_client=None
-
 
             graph_search_entities=[]
 
@@ -314,27 +308,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
             
             ################### End of load graph #########################
 
-            
-
-            found=False        
-            __target_units=[]
-
-            for i in range(len(selected_entities)):
-                e=selected_entities[i]
-                for t in __target_units:
-                    if  t in e.text_unit_ids:
-                        found=True
-                        #print(e)
-                        logging.info("Got unit")
-            if not found:
-                logging.info("unit not returned")
-
-
-            ############# End of LLM-included flow ##############
-            #                                                   #
-            #                                                   #
-            #####################################################
-
         else:
             ### Passed external entities
             selected_entities=ext_entities
@@ -343,7 +316,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
             }
         
         ##################### PROCESS RESPONSE ##########################
-
 
         # build context
         final_context = list[str]()
@@ -407,7 +379,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
             # build text unit context
             text_unit_tokens = max(int(max_tokens * text_unit_prop), 0)
 
-            
             if ext_entities!=[] or isinstance(self.entity_text_embeddings,KustoVectorStore):
                 text_unit_context, text_unit_context_data = self._build_text_unit_context_kusto(
                     selected_entities=selected_entities,
@@ -427,12 +398,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             if text_unit_context.strip() != "":
                 final_context.append(text_unit_context)
                 final_context_data = {**final_context_data, **text_unit_context_data}
-
-        if 'margin' in text_unit_context:
-            print('Got unit for LLM')
-        else:
-            print('Not passing unit to llm')
-
+    
         ############### get doc ids
         
         if ext_entities == []:
