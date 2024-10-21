@@ -228,8 +228,7 @@ class Summarizer:
     def summarize(self,query,**kwargs)->str:
         try:
             start_time = time.time()
-            context_text, context_records = self.context_builder.build_context(
-                query="", #we do not pass query here
+            context_text, context_records = self.context_builder.build_context_summarization(
                 **kwargs,
                 **self.context_builder_params,
             )
