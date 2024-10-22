@@ -24,7 +24,9 @@ def get_relationships_from_graphdb(query:str,selected_entity_ids:list[str],graph
     #print(graphdb_client.result_to_df(relationships_result))
     return read_relationships(
         graphdb_client.result_to_df(relationships_result),
-        short_id_col="human_readable_id"
+        short_id_col="human_readable_id",
+        source_col="outV",
+        target_col="inV",
     )
 
 def get_in_network_relationships(

@@ -168,7 +168,9 @@ class GraphDBClient:
             message=(
                 f"""g.V().has('id', '{entity_id}')
                   .bothE('connects')
-                  .project('source_id', 'target_id', 'weight','text_unit_ids','id','description','rank')
+                  .project('source_entity_id','target_entity_id','source_id', 'target_id', 'weight','text_unit_ids','id','description','rank')
+                    .by(__.outV().id())
+                    .by(__.inV().id())
                     .by(outV().values('id'))
                     .by(inV().values('id'))
                     .by('rank')
@@ -189,9 +191,9 @@ class GraphDBClient:
         json_data = []
         for rows in result:
             for row in rows:
-                source_id = row['source_id']
-                target_id = row['target_id']
-                rank = row['rank']
+                source_id = row['source_entity_id']
+                target_id = row['target_entity_id']
+                weight = row['weight']
                 text_unit_ids = row['text_unit_ids']
                 related_entity_id = source_id if source_id != entity_id else target_id
                 json_data.append({'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,'id':row['id'],'source':source_id,'target':target_id,'description':row['description'],'rank':row['rank']})

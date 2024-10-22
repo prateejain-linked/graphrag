@@ -57,7 +57,7 @@ def build_entity_context(
     all_context_records = [header]
     for entity in selected_entities:
         new_context = [
-            entity.short_id if entity.short_id else "",
+            entity.id if entity.id else "",
             entity.title,
             entity.description if entity.description else "",
         ]
