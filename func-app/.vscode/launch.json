@@ -1,26 +1,13 @@
 {
-   "version": "0.2.0",
-   "configurations": [
-       {
-           "name": "Attach to Python Functions",
-           "type": "python",
-           "request": "attach",
-           "port": 9091,
-           "preLaunchTask": "func: host start",
-           "justMyCode": true,
-           "environment": [
-            { 
-                "name" : "AZURE_CLIENT_ID",
-                "value" : "500051c4-c242-4018-9ae4-fb983cfebefd",
-            },
-            { 
-                "name" : "AZURE_QUEUE_URL",
-                "value" : "https://inputdatasetsa.queue.core.windows.net",
-            },
-            { 
-                "name" : "AZURE_QUEUE_NAME",
-                "value" : "inputdataetqu",
-            }]
-       }
-   ]
-}
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Python Functions",
+            "type": "python",
+            "request": "attach",
+            "port": 9091,
+            "preLaunchTask": "func: host start",
+            "justMyCode": true
+        }
+    ]
+ }

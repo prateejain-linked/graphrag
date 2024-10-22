@@ -65,7 +65,7 @@ class RateLimitingLLM(LLM[TIn, TOut], Generic[TIn, TOut]):
     ):
         self._delegate = delegate
         self._rate_limiter = rate_limiter
-        self._semaphore = None
+        self._semaphore = semaphore
         self._config = config
         self._operation = operation
         self._retryable_errors = retryable_errors
