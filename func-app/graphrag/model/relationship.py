@@ -37,6 +37,9 @@ class Relationship(Identified):
     attributes: dict[str, Any] | None = None
     """Additional attributes associated with the relationship (optional). To be included in the search prompt"""
 
+    source_id: str | None = None
+    target_id: str | None = None
+
     @classmethod
     def from_dict(
         cls,

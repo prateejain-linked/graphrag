@@ -32,7 +32,6 @@ from graphrag.query.structured_search.local_search.mixed_context import (
 from graphrag.query.structured_search.local_search.search import LocalSearch, Summarizer
 from graphrag.vector_stores import BaseVectorStore
 
-from graphrag.query.summarizer import Summarizer
 
 def get_llm(config: GraphRagConfig) -> ChatOpenAI:
     """Get the LLM client."""
@@ -53,7 +52,7 @@ def get_llm(config: GraphRagConfig) -> ChatOpenAI:
     creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
                                      exclude_interactive_browser_credential = False)
     azure_ad_token_provider = None
-    if is_azure_client and not config.llm.api_key:
+    if is_azure_client : #and not config.llm.api_key:
         azure_ad_token_provider = get_bearer_token_provider(creds, cognitive_services_endpoint)
 
     return ChatOpenAI(
@@ -85,7 +84,7 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
     creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
                                      exclude_interactive_browser_credential = False)
     azure_ad_token_provider = None
-    if is_azure_client and not config.llm.api_key:
+    if is_azure_client : #and not config.llm.api_key:
         azure_ad_token_provider = get_bearer_token_provider(creds, cognitive_services_endpoint)
 
     return OpenAIEmbedding(
@@ -99,7 +98,6 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
         api_version=config.embeddings.llm.api_version,
         max_retries=config.embeddings.llm.max_retries,
     )
-
 
 def get_local_search_engine(
     config: GraphRagConfig,
@@ -133,6 +131,7 @@ def get_local_search_engine(
             embedding_vectorstore_key=EntityVectorStoreKey.ID,  # if the vectorstore uses entity title as ids, set this to EntityVectorStoreKey.TITLE
             text_embedder=text_embedder,
             token_encoder=token_encoder,
+            is_optimized_search= is_optimized_search,
             use_kusto_community_reports=use_kusto_community_reports,
             config=config,
             context_id=context_id,
@@ -208,7 +207,6 @@ def get_global_search_engine(
         concurrent_coroutines=gs_config.concurrency,
         response_type=response_type,
     )
-
 def get_summarizer(
     config: GraphRagConfig,
     response_type:str,
@@ -227,7 +225,7 @@ def get_summarizer(
         context_builder=LocalSearchMixedContext(
             entities=[],
             entity_text_embeddings=None, # no vector store here
-            embedding_vectorstore_key=EntityVectorStoreKey.ID, 
+            embedding_vectorstore_key=EntityVectorStoreKey.ID,  # if the vectorstore uses entity title as ids, set this to EntityVectorStoreKey.TITLE
             text_embedder=text_embedder,
             token_encoder=token_encoder,
             config=config,

@@ -178,7 +178,7 @@ class LocalSearch(BaseSearch):
         context_text, context_records = self.context_builder.build_context(
             query=query,
             conversation_history=conversation_history,
-            is_optimized_search = True,
+            is_optimized_search = self.optimized_search,
             **kwargs,
             **self.context_builder_params,
         )
@@ -228,8 +228,7 @@ class Summarizer:
     def summarize(self,query,**kwargs)->str:
         try:
             start_time = time.time()
-            context_text, context_records = self.context_builder.build_context(
-                query="", #we do not pass query here
+            context_text, context_records = self.context_builder.build_context_summarization(
                 **kwargs,
                 **self.context_builder_params,
             )
