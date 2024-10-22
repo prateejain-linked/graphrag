@@ -67,8 +67,7 @@ class KustoVectorStore(BaseVectorStore):
         elif(env == "DEVELOPMENT"):
             #kcsb = KustoConnectionStringBuilder.with_aad_device_authentication(str(cluster))
             logging.info("KUSTO DEVELPMENT MODE")
-            #kcsb = KustoConnectionStringBuilder.with_interactive_login(str(cluster))
-            kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(cluster)
+            kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(str(cluster))
         else:
              kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
             str(cluster), str(client_id), str(client_secret), str(authority_id))

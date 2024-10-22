@@ -156,7 +156,6 @@ def index_cli(
     cli: bool = False,
     use_kusto_community_reports: bool = False,
     optimized_search: bool = False,
- 
 ):
     """Run the pipeline with the given config."""
     logging.info("** IN CLI \n\n")
