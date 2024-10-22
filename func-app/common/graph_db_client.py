@@ -13,6 +13,8 @@ import time
 import os
 import json
 
+from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
+
 # Azure Cosmos DB Gremlin Endpoint and other constants
 COSMOS_DB_SCOPE = "https://cosmos.azure.com/.default"  # The scope for Cosmos DB
 class GraphDBClient:
@@ -88,10 +90,26 @@ class GraphDBClient:
         return element_count>0
 
     def write_vertices(self,data: pd.DataFrame, added_vertices: set)->None:
+        pt_enabled = os.environ.get("PROTOTYPE")
         for row in data.itertuples():
             if row.id not in added_vertices:
                 added_vertices.add(row.id)
-                rs = self._client.submit(
+                if pt_enabled:
+                    message=(
+                        "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
+                        "g.addV('entity')"
+                        ".property('id', prop_id)"
+                        ".property('human_readable_id', prop_human_readable_id)"
+                        ".property('category', prop_partition_key)"
+                        ".property(list,'text_unit_ids',prop_text_unit_ids))"
+                    )
+                    bindings={
+                        "prop_id": row.id,
+                        "prop_human_readable_id": row.human_readable_id,
+                        "prop_partition_key": "entities",
+                        "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
+                    }
+                else:
                     message=(
                         "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
                         "g.addV('entity')"
@@ -104,7 +122,7 @@ class GraphDBClient:
                         ".property(list,'description_embedding',prop_description_embedding)"
                         ".property(list,'graph_embedding',prop_graph_embedding)"
                         ".property(list,'text_unit_ids',prop_text_unit_ids))"
-                    ),
+                    )
                     bindings={
                         "prop_id": row.id,
                         "prop_name": row.name,
@@ -115,13 +133,39 @@ class GraphDBClient:
                         "prop_description_embedding":json.dumps(row.description_embedding.tolist() if row.description_embedding is not None else []),
                         "prop_graph_embedding":json.dumps(row.graph_embedding.tolist() if row.graph_embedding is not None else []),
                         "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
-                    },
-                )
+                    }
+                rs = self._client.submit(message=message, bindings=bindings)
                 self.running_jobs.add(rs)
 
     def write_edges(self,data: pd.DataFrame)->None:
+        pt_enabled = os.environ.get("PROTOTYPE")
         for row in data.itertuples():
-            rs = self._client.submit(
+            if pt_enabled:
+                message=(
+                    "g.V().has('id',prop_source_id)"
+                    ".addE('connects')"
+                    ".to(g.V().has('id',prop_target_id))"
+                    ".property('weight',prop_weight)"
+                    ".property(list,'text_unit_ids',prop_text_unit_ids)"
+                    ".property('id',prop_id)"
+                    ".property('human_readable_id',prop_human_readable_id)"
+                    ".property('source_degree',prop_source_degree)"
+                    ".property('target_degree',prop_target_degree)"
+                    ".property('rank',prop_rank)"
+                )
+                bindings={
+                    "prop_partition_key": "entities",
+                    "prop_source_id": generate_entity_id(row.source),
+                    "prop_target_id": generate_entity_id(row.target),
+                    "prop_weight": row.weight,
+                    "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
+                    "prop_id": row.id,
+                    "prop_human_readable_id": row.human_readable_id,
+                    "prop_source_degree": row.source_degree,
+                    "prop_target_degree": row.target_degree,
+                    "prop_rank": row.rank,
+                }
+            else:
                 message=(
                     "g.V().has('name',prop_source_id)"
                     ".addE('connects')"
@@ -136,7 +180,7 @@ class GraphDBClient:
                     ".property('rank',prop_rank)"
                     ".property('source',prop_source)"
                     ".property('target',prop_target)"
-                ),
+                )
                 bindings={
                     "prop_partition_key": "entities",
                     "prop_source_id": row.source,
@@ -151,8 +195,9 @@ class GraphDBClient:
                     "prop_rank": row.rank,
                     "prop_source": row.source,
                     "prop_target": row.target,
-                },
-            )
+                }
+
+            rs = self._client.submit(message=message, bindings=bindings)
             self.running_jobs.add(rs)
 
     def get_top_related_unique_edges(self, entity_id: str, top: int) -> [dict[str, str]]:
