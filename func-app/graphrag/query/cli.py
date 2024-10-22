@@ -3,9 +3,7 @@
 
 """Command line interface for the query module."""
 
-import ast
 import asyncio
-import json
 import os
 from pathlib import Path
 from typing import cast
@@ -176,7 +174,7 @@ def cs_search(
     ):
 
     """Run a local search with the given query."""
-    _, root_dir, config = _configure_paths_and_settings(
+    data_dir, root_dir, config = _configure_paths_and_settings(
         data_dir, root_dir, config_dir
     )
 
@@ -193,7 +191,9 @@ def cs_search(
     reports=[]
     final_relationships=[]
 
+
     ##### LEGACY #######################
+
     if vector_store_type == VectorStoreType.LanceDB:
         # for the POC purpose input artifacts blob, output artifacts blob and input query blob storage are going to same.
         if(config.storage.type == StorageType.memory):
@@ -248,6 +248,7 @@ def cs_search(
         )
         text_units=read_indexer_text_units(final_text_units)
 
+
     ########################################################################################
 
     if use_kusto_community_reports:
@@ -277,16 +278,13 @@ def cs_search(
         use_kusto_community_reports=use_kusto_community_reports,
     )
 
+    
     if optimized_search:
         result = search_engine.optimized_search(query=query)
     else:
         result = search_engine.search(query=query,path=path)
 
-    pt_enabled = (os.environ.get("PROTOTYPE", default = "False")).lower() == "True"
 
-    if pt_enabled is True:
-        return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
-    
     raw_result=query + "\n__RAW_RESULT__:\n"+ json.dumps(result.context_data['raw_result'])
     
     if save_result:
@@ -509,7 +507,6 @@ def summarize(query_id:str,
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
 
-
         #list_relationships=dict_json.get("relationships",[])
         list_text_units=dict_json["text_unit_ids"]
 
@@ -566,7 +563,6 @@ def summarize(query_id:str,
     result = summarizer.summarize(query)
     return result.response
 
-
 def split_raw_response(data):
     delimiter="\n__RAW_RESULT__:\n"
     pdelim=data.find(delimiter)
@@ -580,11 +576,13 @@ def split_raw_response(data):
 
     return query,raw_json
 
-def rrf_scoring(query_ids:str,root_dir:str,k=60):
+def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
+
     data_dir, root_dir, config = _configure_paths_and_settings(
         None, root_dir, None
     )
     rrf_scores = {}
+    docs={}
     blob_storage_client = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
@@ -592,13 +590,16 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
     query_ids=query_ids.split(',')
     print('RRF over',query_ids)
 
+    query='' # we expect the query to be the same for given raw reponses
     for query_id in query_ids:
         blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
-        q,raw_json=split_raw_response(blob_data)
+        query,raw_json=split_raw_response(blob_data) # query should stay the same
         list_json=json.loads(raw_json)
         for entity_json in list_json:
             for text_unit_id in entity_json["text_unit_ids"]:
                 entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
+                doc_id = entity_json['document_ids']
+                docs[entity_text_unit] = doc_id
                 if entity_text_unit not in rrf_scores:
                     rrf_scores[entity_text_unit] = 0
                 rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"]) #assuming rank is stored as an integer
@@ -611,10 +612,16 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
         text_unit_id=couple[d+1:]
         result.append({'entity_id':entity_id,
                        'text_unit_id:':text_unit_id,
-                       'rank':rrf_scores[couple]})
+                       'rank':rrf_scores[couple],
+                       'document_ids': docs[couple] }
+                      )
         
 
-    result= json.dumps(result)
+
+    result.sort(key=lambda x : x['rank'],reverse=True)
+    result=result[:top_k]
+
+    result= query + "\n__RAW_RESULT__:\n"+ json.dumps(result)
 
     new_query_id= uuid.uuid4()
     

@@ -193,10 +193,12 @@ class KustoVectorStore(BaseVectorStore):
             return self.similarity_search_by_vector(query_embedding, k)
         return []
 
-    def get_extracted_entities(self, text: str, text_embedder: TextEmbedder, k: int = 10, 
+    def get_extracted_entities(self, text: str, text_embedder: TextEmbedder, k: int = 10,
                                preselected_entities=[],
                                **kwargs: Any
     ) -> list[Entity]:
+        
+
         query_embedding = text_embedder(text)
 
         if preselected_entities==[]:
@@ -207,7 +209,7 @@ class KustoVectorStore(BaseVectorStore):
             | top {k} by similarity desc
             """
         else:
-            
+
             chosen_ids=", ".join(f"'{id}'" for id in preselected_entities )
             query = f"""
             let query_vector = dynamic({query_embedding});
@@ -220,21 +222,22 @@ class KustoVectorStore(BaseVectorStore):
 
         response = self.client.execute(self.database, query)
         df = dataframe_from_result_table(response.primary_results[0])
+        pt_enabled = os.environ.get("PROTOTYPE")
 
         return [
             Entity(
-                id=row.get('id', default=None),
-                title=row.get('title', default=None),
-                type=row.get('type', default=None),
-                description=row.get('description', default=None),
-                graph_embedding=row.get('graph_embedding', default=None),
-                text_unit_ids=row.get('text_unit_ids', default=None),
-                description_embedding=row.get('description_embedding', default=None),
+                id=row["id"],
+                title=row["title"] if not pt_enabled else '',
+                type=row["type"] if not pt_enabled else '',
+                description=row["description"] if not pt_enabled else '',
+                graph_embedding=row["graph_embedding"] if not pt_enabled else '',
+                text_unit_ids=row["text_unit_ids"],
+                description_embedding=row["description_embedding"],
                 short_id="",
-                community_ids=row.get('community_ids', default=None),
-                document_ids=row.get('document_ids', default=None),
-                rank=row.get('rank', default=None),
-                attributes=row.get('attributes', default=None),
+                community_ids=row["community_ids"] if not pt_enabled else '[]',
+                document_ids=row["document_ids"] if not pt_enabled else '[]',
+                rank=row["rank"],
+                attributes=row["attributes"] if not pt_enabled else '',
                 #score= 1 + float(row["similarity"]), #score not in Entity currently
             ) for _, row in df.iterrows()
         ]
@@ -245,9 +248,7 @@ class KustoVectorStore(BaseVectorStore):
         self.client.execute(self.database,f".drop table {self.reports_name} ifexists")
 
     def setup_entities(self) -> None:
-        if self._check_if_table_exists(self.collection_name):
-            return
-        command = f".drop table {self.collection_name} ifexists	"
+        command = f".drop table {self.collection_name} ifexists"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -355,6 +356,8 @@ class KustoVectorStore(BaseVectorStore):
     def load_text_units(self, units: list[TextUnit], overwrite: bool = False) -> None:
         df = pd.DataFrame(units)
 
+
+
         if overwrite:
             self.setup_text_units()
 
@@ -376,6 +379,10 @@ class KustoVectorStore(BaseVectorStore):
     def setup_docs(self) -> None: #Called by indexer
         command = f".drop table {self.docs_tbl_name} ifexists"
         self.client.execute(self.database, command)
+<<<<<<< HEAD
+=======
+
+>>>>>>> Query functions
         command = f".create table {self.docs_tbl_name} (id: string, in_path:string, \
             out_path: string)"
 
@@ -383,6 +390,10 @@ class KustoVectorStore(BaseVectorStore):
 
     def load_doc_stats(self, rows) -> None: #called by indexer
         df = pd.DataFrame(rows)
+<<<<<<< HEAD
+=======
+
+>>>>>>> Query functions
         ingestion_command = f".ingest inline into table {self.docs_tbl_name} <| {df.to_csv(index=False, header=False)}"
         self.client.execute(self.database, ingestion_command)
 
@@ -398,6 +409,10 @@ class KustoVectorStore(BaseVectorStore):
             id_list=ast.literal_eval(e.text_unit_ids)
             unit_ids.extend([id for id in id_list])
         return self.retrieve_text_units_by_id(unit_ids)
+<<<<<<< HEAD
+=======
+
+>>>>>>> Query functions
     def retrieve_text_units_by_id(self,unit_ids):
         unit_ids_str=", ".join(f"'{id}'" for id in unit_ids )
 
@@ -405,19 +420,22 @@ class KustoVectorStore(BaseVectorStore):
         r=self.exe(command)
         r=dataframe_from_result_table(r.primary_results[0])
 
-        cite_index=1
-        res=[]
+        pt_enabled = os.environ.get("PROTOTYPE")
+        
 
+        
+        res=[]     
+        cite_index=1
         for _,row in  r.iterrows():
             u=TextUnit(
                 id=row['id'],
                 short_id=str(cite_index),
-                text=row['text'],
+                text=row['text'] if not pt_enabled else '',
                 text_embedding=[],
-                entity_ids=row['entity_ids'],
-                relationship_ids=row['relationship_ids'],
+                entity_ids=row['entity_ids'] if not pt_enabled else '[]',
+                relationship_ids=row['relationship_ids']  if not pt_enabled else '[]' ,
                 covariate_ids=[],
-                n_tokens=row['n_tokens'],
+                n_tokens=row['n_tokens'] if not pt_enabled else '',
                 document_ids=row['document_ids'],
                 attributes={} #row['attributes'],
             )
@@ -425,10 +443,17 @@ class KustoVectorStore(BaseVectorStore):
             cite_index+=1
 
         return res
-    
+
     def get_extracted_reports(
         self, community_ids: list[int], **kwargs: Any
     ) -> list[CommunityReport]:
+        
+        
+
+
+        
+
+
         community_ids = ", ".join([str(id) for id in community_ids])
         query = f"""
         {self.reports_name}
