@@ -1,4 +1,3 @@
-import logging
 import os
 import pandas as pd
 
@@ -173,7 +172,7 @@ class GraphDBClient:
                     .by(__.inV().id())
                     .by(outV().values('id'))
                     .by(inV().values('id'))
-                    .by('rank')
+                    .by('weight')
                     .by('text_unit_ids')
                   .group()
                     .by(select('source_id', 'target_id'))
@@ -181,7 +180,7 @@ class GraphDBClient:
                   .unfold()
                   .select(values)
                   .unfold()
-                  .order().by(select('rank'), decr)
+                  .order().by(select('weight'), decr)
                   .dedup('source_id','target_id')
                   .limit({top})
                 """
