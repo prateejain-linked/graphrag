@@ -213,8 +213,8 @@ class ContextSwitcher:
         final_covariates = pd.DataFrame()
         graph_db_client=None
 
-        #if len(data_paths) > 1:
-            #raise ValueError("Place only one datapath in files. Will auto-itrate through internal folders.")
+        if len(data_paths) > 1:
+            raise ValueError("Place only one datapath in files. Will auto-itrate through internal folders.")
         
 
         if config.graphdb.enabled:
@@ -236,8 +236,8 @@ class ContextSwitcher:
         if db_enabled:
             description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
 
-        #dirs=os.listdir(data_paths[0])
-        #i_count=len(dirs)
+        dirs=os.listdir(data_paths[0])
+        i_count=len(dirs)
         vector_store_args = (
                 config.embeddings.vector_store if config.embeddings.vector_store else {}
         )
@@ -252,11 +252,11 @@ class ContextSwitcher:
         if vector_store_type != VectorStoreType.Kusto:
             ValueError("Context switching is only supporeted for vectore_store.type=kusto ")
 
-        vmap=set()
+        vmap={}
 
         #for p_id in range(i_count):
-        for data_path in data_paths:
-            #data_path=f"{data_paths[0]}\\{dir}\\version=0"
+        for dir in dirs:
+            data_path=f"{data_paths[0]}\\{dir}\\version=0"
             #data_path=f"{data_paths[0]}\\{p_id}" #windows
             #data_path=f"{data_paths[0]}/{p_id}" #linux
             #check from the config for the ouptut storage type and then read the data from the storage.

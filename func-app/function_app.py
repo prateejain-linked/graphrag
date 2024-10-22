@@ -6,7 +6,8 @@ import csv
 import codecs
 from graphrag.index.cli import index_cli
 import os 
-from graphrag.query.cli import run_local_search, summarize, rrf_scoring
+
+from graphrag.query.cli import run_local_search, summarize,rrf_scoring
 from time import sleep
 app = func.FunctionApp()
 

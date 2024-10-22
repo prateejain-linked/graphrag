@@ -258,11 +258,10 @@ def index_cli(
 
     ################ INDEXING ITERATION
     orig_storage_base=pipeline_config.storage.base_dir
-    orig_input_base="input"
-    input_full_path = os.path.dirname(__file__) + '\\..\\.' + root + "\\" + pipeline_config.input.base_dir
-    i_count=len(os.listdir(root+"\\input"))
-    #input_full_path = " "
-    logging.info("INPUT"+str(input_full_path))
+    orig_input_base=" "
+    #input_full_path = os.path.dirname(__file__) + '\\..\\.' + root + "\\" + pipeline_config.input.base_dir
+    #i_count=len(os.listdir(root+"\\input"))
+    input_full_path = " "
     folders=os.listdir(input_full_path)
     i_count=len(folders)
 

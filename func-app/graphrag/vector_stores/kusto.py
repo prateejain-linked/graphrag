@@ -198,6 +198,7 @@ class KustoVectorStore(BaseVectorStore):
                                **kwargs: Any
     ) -> list[Entity]:
         query_embedding = text_embedder(text)
+
         if preselected_entities==[]:
             query = f"""
             let query_vector = dynamic({query_embedding});
@@ -206,6 +207,7 @@ class KustoVectorStore(BaseVectorStore):
             | top {k} by similarity desc
             """
         else:
+            
             chosen_ids=", ".join(f"'{id}'" for id in preselected_entities )
             query = f"""
             let query_vector = dynamic({query_embedding});
