@@ -464,7 +464,7 @@ def summarize(query_id:str,
               response_type="multiple paragraphs",
               community_level=2)->str:
     data_dir, root_dir, config = _configure_paths_and_settings(
-        None, root_dir, None
+        '', root_dir, None
     )
     blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
@@ -578,8 +578,8 @@ def split_raw_response(data):
 
 def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
 
-    data_dir, root_dir, config = _configure_paths_and_settings(
-        None, root_dir, None
+    _, root_dir, config = _configure_paths_and_settings(
+        '', root_dir, None
     )
     rrf_scores = {}
     docs={}
@@ -611,7 +611,7 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
         entity_id = couple[:d]
         text_unit_id=couple[d+1:]
         result.append({'entity_id':entity_id,
-                       'text_unit_id:':text_unit_id,
+                       'text_unit_ids':[text_unit_id],
                        'rank':rrf_scores[couple],
                        'document_ids': docs[couple] }
                       )
@@ -630,4 +630,4 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
                         ) 
     ) 
 
-    return f"{result}\n\nStored as {new_query_id}"
+    return str(new_query_id)

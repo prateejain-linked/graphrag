@@ -196,87 +196,54 @@ class GraphDBClient:
         -------
             A list of dictionaries containing the related entity IDs, weights, and text unit IDs.
         """
-        env = os.environ.get("ENVIRONMENT")
-
-        if env=='DEVELOPMENT':
-            #Load relationships
-            m=(
-                    f"""g.V().has('id', '{entity_id}')
-                    .bothE('connects')
-                      .project('id','source_id', 'target_id', 'weight','text_unit_ids','description','source','target','rank')
-						.by('id')
-                        .by(outV().values('id'))
-                        .by(inV().values('id'))
-                        .by('weight')
-                        .by('text_unit_ids')
-                        .by('description')
-                        .by('source')
-                        .by('target')
-                        .by('rank')
-                    .group()
-                        .by(select('source_id', 'target_id'))
-                        .by(fold())
-                    .unfold()
-                    .select(values)
-                    .unfold()
-                    .order().by(select('weight'), decr)
-                    .dedup('source_id','target_id')
-                    .limit({top})
-                    """
-                )
-            result = self._client.submit(
-                message=m,
+ 
+        #Load relationships
+        m=(
+                f"""g.V().has('id', '{entity_id}')
+                .bothE('connects')
+                    .project('id','source_id', 'target_id', 'weight','text_unit_ids','description','source','target','rank')
+                    .by('id')
+                    .by(outV().values('id'))
+                    .by(inV().values('id'))
+                    .by('weight')
+                    .by('text_unit_ids')
+                    .by('description')
+                    .by(coalesce(values('source'), constant ('')))
+                    .by(coalesce(values('target'), constant ('')))
+                    .by(coalesce(values('rank'), constant (0)))
+                .group()
+                    .by(select('source_id', 'target_id'))
+                    .by(fold())
+                .unfold()
+                .select(values)
+                .unfold()
+                .order().by(select('weight'), decr)
+                .dedup('source_id','target_id')
+                .limit({top})
+                """
             )
+        result = self._client.submit(
+            message=m,
+        )
 
-            json_data = []
-            for rows in result:
-                for row in rows:
-                    id=row['id']
-                    source_id = row['source_id']
-                    target_id = row['target_id']
-                    weight = row['weight']
-                    text_unit_ids = row['text_unit_ids']
-                    description = row['description']
-                    source = row['source']
-                    target = row['target']
-                    rank=row['rank']
-                    related_entity_id = source_id if source_id != entity_id else target_id
-                    json_data.append({'id':id,'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,
-                                      'description':description, 'source':source, 'target':target,'rank':rank,
-                                      'source_id':source_id, 'target_id':target_id})
+        json_data = []
+        for rows in result:
+            for row in rows:
+                id=row['id']
+                source_id = row['source_id']
+                target_id = row['target_id']
+                weight = row['weight']
+                text_unit_ids = row['text_unit_ids']
+                description = row['description']
+                source = row['source']
+                target = row['target']
+                rank=row['rank']
+                related_entity_id = source_id if source_id != entity_id else target_id
+                json_data.append({'id':id,'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,
+                                    'description':description, 'source':source, 'target':target,'rank':rank,
+                                    'source_id':source_id, 'target_id':target_id})
 
-        else:
-            result = self._client.submit(
-                message=(
-                    f"""g.V().has('id', '{entity_id}')
-                    .bothE('connects')
-                    .project('source_id', 'target_id', 'weight','text_unit_ids')
-                        .by(outV().values('id'))
-                        .by(inV().values('id'))
-                        .by('weight')
-                        .by('text_unit_ids')
-                    .group()
-                        .by(select('source_id', 'target_id'))
-                        .by(fold())
-                    .unfold()
-                    .select(values)
-                    .unfold()
-                    .order().by(select('weight'), decr)
-                    .dedup('source_id','target_id')
-                    .limit({top})
-                    """
-                ),
-            )
 
-            json_data = []
-            for rows in result:
-                for row in rows:
-                    source_id = row['source_id']
-                    target_id = row['target_id']
-                    weight = row['weight']
-                    text_unit_ids = row['text_unit_ids']
-                    related_entity_id = source_id if source_id != entity_id else target_id
-                    json_data.append({'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids})
 
         #####################################################################
 
