@@ -212,9 +212,6 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
 
         preselected_entities, selected_entities, entity_to_related_entities = [], [], []
-        env = os.environ.get("ENVIRONMENT")
-
-
 
         # ENTITY ISOLATION
         if path in (2,3):
@@ -319,24 +316,24 @@ class LocalSearchMixedContext(LocalContextBuilder):
             
             # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
             # THIS PART REPLACES graphdb operation in get_[in/out]network_relationship
-            if env=='DEVELOPMENT':
-                #load relationships
-                r_id=1
-                relationships=[]
+            
+            #load relationships
+            r_id=1
+            relationships=[]
 
-                for group in entity_to_related_entities.values():
-                    for e in group:
-                        r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
-                                            target=e['target'],description=e['description']
-                                            ,attributes={'rank':e['rank']}, source_id=e['source_id']
-                                            ,target_id=e['target_id'])
-                        r_id+=1
-                        relationships.append(r)
-                        print("Relationship:",e['source'],">",e['target'])
+            for group in entity_to_related_entities.values():
+                for e in group:
+                    r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
+                                        target=e['target'],description=e['description']
+                                        ,attributes={'rank':e['rank']}, source_id=e['source_id']
+                                        ,target_id=e['target_id'])
+                    r_id+=1
+                    relationships.append(r)
+                    print("Relationship:",e['source'],">",e['target'])
 
-                self.relationships = {
-                    relationship.id: relationship for relationship in relationships
-                }
+            self.relationships = {
+                relationship.id: relationship for relationship in relationships
+            }
 
 
             if self.relationships=={}:

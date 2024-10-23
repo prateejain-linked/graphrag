@@ -77,8 +77,10 @@ def query_save(req: func.HttpRequest) -> func.HttpResponse:
                 save_result=True
             )
     
+    json_res={'query_id':result}
+
     return func.HttpResponse(
-        "\n[>] Query completed\n\n\n"+result,
+        json.dumps(json_res),
         status_code=200
     )
 
@@ -87,7 +89,7 @@ def query_save(req: func.HttpRequest) -> func.HttpResponse:
 def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
 
     query_id = req.params['query_id']
-    output = summarize(query_id=query_id, root_dir='/home/site/wwwroot/exe')
+    output = summarize(query_id=query_id, root_dir='settings')
     return func.HttpResponse(
         output,
         status_code=200
@@ -99,8 +101,9 @@ def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
 def rrf(req: func.HttpRequest) -> func.HttpResponse:
 
     query_ids = req.params['query_ids']
-    output = rrf_scoring(query_ids=query_ids,root_dir='/home/site/wwwroot/exe')
+    output = rrf_scoring(query_ids=query_ids,root_dir='settings')
+    json_res={'query_id':output}
     return func.HttpResponse(
-        str(output),
+        json.dumps(json_res),
         status_code=200
     )
