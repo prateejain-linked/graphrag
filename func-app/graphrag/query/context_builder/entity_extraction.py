@@ -50,7 +50,8 @@ def map_query_to_entities_in_place(
     )
     import ast
     for result in search_results:
-        result.community_ids = ast.literal_eval(result.community_ids)
+        if result.community_ids is not None:
+            result.community_ids = ast.literal_eval(result.community_ids)
     return search_results
 
 def map_query_to_entities(

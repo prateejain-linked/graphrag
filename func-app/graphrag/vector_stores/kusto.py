@@ -62,12 +62,12 @@ class KustoVectorStore(BaseVectorStore):
         env = os.environ.get("ENVIRONMENT")
         if(env == "AZURE"):
             kcsb = KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(
-                str(cluster), client_id="<>"
-            )
+                str(cluster), client_id=os.environ.get("AZURE_CLIENT_ID") )
         elif(env == "DEVELOPMENT"):
             #kcsb = KustoConnectionStringBuilder.with_aad_device_authentication(str(cluster))
             logging.info("KUSTO DEVELPMENT MODE")
-            kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(str(cluster))
+            #kcsb = KustoConnectionStringBuilder.with_interactive_login(str(cluster))
+            kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(cluster)
         else:
              kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
             str(cluster), str(client_id), str(client_secret), str(authority_id))
@@ -193,10 +193,12 @@ class KustoVectorStore(BaseVectorStore):
             return self.similarity_search_by_vector(query_embedding, k)
         return []
 
-    def get_extracted_entities(self, text: str, text_embedder: TextEmbedder, k: int = 10, 
+    def get_extracted_entities(self, text: str, text_embedder: TextEmbedder, k: int = 10,
                                preselected_entities=[],
                                **kwargs: Any
     ) -> list[Entity]:
+        
+
         query_embedding = text_embedder(text)
 
         if preselected_entities==[]:
@@ -207,7 +209,7 @@ class KustoVectorStore(BaseVectorStore):
             | top {k} by similarity desc
             """
         else:
-            
+
             chosen_ids=", ".join(f"'{id}'" for id in preselected_entities )
             query = f"""
             let query_vector = dynamic({query_embedding});
@@ -220,21 +222,22 @@ class KustoVectorStore(BaseVectorStore):
 
         response = self.client.execute(self.database, query)
         df = dataframe_from_result_table(response.primary_results[0])
+        pt_enabled = os.environ.get("PROTOTYPE")
 
         return [
             Entity(
                 id=row["id"],
-                title=row["title"],
-                type=row["type"],
-                description=row["description"],
-                graph_embedding=row["graph_embedding"],
+                title=row["title"] if not pt_enabled else '',
+                type=row["type"] if not pt_enabled else '',
+                description=row["description"] if not pt_enabled else '',
+                graph_embedding=row["graph_embedding"] if not pt_enabled else '',
                 text_unit_ids=row["text_unit_ids"],
                 description_embedding=row["description_embedding"],
                 short_id="",
-                community_ids=row["community_ids"],
-                document_ids=row["document_ids"],
+                community_ids=row["community_ids"] if not pt_enabled else '[]',
+                document_ids=row["document_ids"] if not pt_enabled else '[]',
                 rank=row["rank"],
-                attributes=row["attributes"],
+                attributes=row["attributes"] if not pt_enabled else '',
                 #score= 1 + float(row["similarity"]), #score not in Entity currently
             ) for _, row in df.iterrows()
         ]
@@ -247,10 +250,29 @@ class KustoVectorStore(BaseVectorStore):
     def setup_entities(self) -> None:
         command = f".drop table {self.collection_name} ifexists"
         self.client.execute(self.database, command)
-        command = f".create table {self.collection_name} (id: string, short_id: real, title: string, type: string, description: string, description_embedding: dynamic, name_embedding: dynamic, graph_embedding: dynamic, community_ids: dynamic, text_unit_ids: dynamic, document_ids: dynamic, rank: real, attributes: dynamic)"
+
+        pt_enabled = os.environ.get("PROTOTYPE")
+
+        if not pt_enabled:
+            entity_table_schema = (f".create table {self.collection_name} (id: string, short_id: real, title: string, type: "
+                                "string, description: string, description_embedding: dynamic, name_embedding: dynamic, "
+                                "graph_embedding: dynamic, community_ids: dynamic, text_unit_ids: dynamic, document_ids: "
+                                "dynamic, rank: real, attributes: dynamic)")
+        else:
+            #remove unwanted data (PROTOTYPE)
+            entity_table_schema = (f".create table {self.collection_name} (id: string, short_id: real, "
+                                " description_embedding: dynamic,"
+                                " text_unit_ids: dynamic,"
+                                " rank: real)")
+
+
+        command = entity_table_schema
         self.client.execute(self.database, command)
-        command = f".alter column {self.collection_name}.graph_embedding policy encoding type = 'Vector16'"
-        self.client.execute(self.database, command)
+
+        if not pt_enabled:
+            command = f".alter column {self.collection_name}.graph_embedding policy encoding type = 'Vector16'"
+            self.client.execute(self.database, command)
+
         command = f".alter column {self.collection_name}.description_embedding policy encoding type = 'Vector16'"
         self.client.execute(self.database, command)
 
@@ -258,8 +280,23 @@ class KustoVectorStore(BaseVectorStore):
         # Convert data to DataFrame
         df = pd.DataFrame(entities)
 
+
+
+        pt_enabled = os.environ.get("PROTOTYPE")
+
+        if pt_enabled:
+            #remove unwanted data (prototype)
+            df.drop("title",axis=1,inplace=True)
+            df.drop("description",axis=1,inplace=True)
+            df.drop("type",axis=1,inplace=True)
+            df.drop("name_embedding",axis=1,inplace=True)
+            df.drop("graph_embedding",axis=1,inplace=True)
+            df.drop("community_ids",axis=1,inplace=True)
+            df.drop("document_ids",axis=1,inplace=True)
+            df.drop("attributes",axis=1,inplace=True)
+
         #df['test_e'] = df['description_embedding'].apply(lambda x: np.ceil( int (np.array(x) * 10**9)) / 10**9)
-        dec_len=12
+        #dec_len=12
         #df['test_e'] = df['description_embedding'].apply(lambda x: ( ((np.array(x) * 10**(dec_len)).astype(np.int64)) / 10**(dec_len)).tolist() )
         #df['description_embedding']=df['test_e']
         # Create or replace table
@@ -267,9 +304,9 @@ class KustoVectorStore(BaseVectorStore):
             self.setup_entities()
 
         # Ingest data
-        
+
         ingestion_command = f".ingest inline into table {self.collection_name} <| {df.to_csv(index=False, header=False)}"
-        
+
         self.client.execute(self.database, ingestion_command)
 
 
@@ -298,16 +335,16 @@ class KustoVectorStore(BaseVectorStore):
     def setup_text_units(self) -> None:
         command = f".drop table {self.text_units_name} ifexists"
         self.client.execute(self.database, command)
-        
-        command = f".create table {self.text_units_name} (id: string, short_id:string, \
-            text: string, text_embedding:string, entity_ids: string, relationship_ids: \
-                string, covariate_ids:string, n_tokens: string, document_ids: string, \
-                    attributes:string )"
-        
-        '''
-        command = f".create table {self.text_units_name} (id: string, text: string,  n_tokens: string,\
-                entity_ids: string, document_ids: string, relationship_ids: string )"
-        '''
+
+        pt_enabled = os.environ.get("PROTOTYPE")
+
+        if not pt_enabled:
+            command = f".create table {self.text_units_name} (id: string, short_id:string, \
+                text: string, text_embedding:string, entity_ids: string, relationship_ids: \
+                    string, covariate_ids:string, n_tokens: string, document_ids: string, \
+                        attributes:string )"
+        else:
+            command=f".create table {self.text_units_name} (id: string, short_id:string,document_ids:string)"
 
         self.exe(command)
 
@@ -315,8 +352,22 @@ class KustoVectorStore(BaseVectorStore):
     def load_text_units(self, units: list[TextUnit], overwrite: bool = False) -> None:
         df = pd.DataFrame(units)
 
+
+
         if overwrite:
             self.setup_text_units()
+
+        pt_enabled = os.environ.get("PROTOTYPE")
+
+        if pt_enabled:
+            #remove unwanted data (prototype)
+            df.drop("text",axis=1,inplace=True)
+            df.drop("text_embedding",axis=1,inplace=True)
+            df.drop("entity_ids",axis=1,inplace=True)
+            df.drop("relationship_ids",axis=1,inplace=True)
+            df.drop("covariate_ids",axis=1,inplace=True)
+            df.drop("n_tokens",axis=1,inplace=True)
+            df.drop("attributes",axis=1,inplace=True)
 
         ingestion_command = f".ingest inline into table {self.text_units_name} <| {df.to_csv(index=False, header=False)}"
         self.client.execute(self.database, ingestion_command)
@@ -324,7 +375,7 @@ class KustoVectorStore(BaseVectorStore):
     def setup_docs(self) -> None: #Called by indexer
         command = f".drop table {self.docs_tbl_name} ifexists"
         self.client.execute(self.database, command)
-        
+
         command = f".create table {self.docs_tbl_name} (id: string, in_path:string, \
             out_path: string)"
 
@@ -332,7 +383,7 @@ class KustoVectorStore(BaseVectorStore):
 
     def load_doc_stats(self, rows) -> None: #called by indexer
         df = pd.DataFrame(rows)
-        
+
         ingestion_command = f".ingest inline into table {self.docs_tbl_name} <| {df.to_csv(index=False, header=False)}"
         self.client.execute(self.database, ingestion_command)
 
@@ -348,7 +399,7 @@ class KustoVectorStore(BaseVectorStore):
             id_list=ast.literal_eval(e.text_unit_ids)
             unit_ids.extend([id for id in id_list])
         return self.retrieve_text_units_by_id(unit_ids)
-    
+
     def retrieve_text_units_by_id(self,unit_ids):
         unit_ids_str=", ".join(f"'{id}'" for id in unit_ids )
 
@@ -356,19 +407,22 @@ class KustoVectorStore(BaseVectorStore):
         r=self.exe(command)
         r=dataframe_from_result_table(r.primary_results[0])
 
-        cite_index=1
-        res=[]
+        pt_enabled = os.environ.get("PROTOTYPE")
+        
 
+        
+        res=[]     
+        cite_index=1
         for _,row in  r.iterrows():
             u=TextUnit(
                 id=row['id'],
                 short_id=str(cite_index),
-                text=row['text'],
+                text=row['text'] if not pt_enabled else '',
                 text_embedding=[],
-                entity_ids=row['entity_ids'],
-                relationship_ids=row['relationship_ids'],
+                entity_ids=row['entity_ids'] if not pt_enabled else '[]',
+                relationship_ids=row['relationship_ids']  if not pt_enabled else '[]' ,
                 covariate_ids=[],
-                n_tokens=row['n_tokens'],
+                n_tokens=row['n_tokens'] if not pt_enabled else '',
                 document_ids=row['document_ids'],
                 attributes={} #row['attributes'],
             )
@@ -376,10 +430,17 @@ class KustoVectorStore(BaseVectorStore):
             cite_index+=1
 
         return res
-    
+
     def get_extracted_reports(
         self, community_ids: list[int], **kwargs: Any
     ) -> list[CommunityReport]:
+        
+        
+
+
+        
+
+
         community_ids = ", ".join([str(id) for id in community_ids])
         query = f"""
         {self.reports_name}

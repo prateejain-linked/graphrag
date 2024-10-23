@@ -3,9 +3,7 @@
 
 """Command line interface for the query module."""
 
-import ast
 import asyncio
-import json
 import os
 from pathlib import Path
 from typing import cast
@@ -286,14 +284,7 @@ def cs_search(
     else:
         result = search_engine.search(query=query,path=path)
 
-    
 
-    pt_enabled = os.environ.get("PROTOTYPE")
-    local_test = not pt_enabled
-
-    if local_test:
-        return result.response + "\n\n" + result.context_data['suc'] # result.context_data['raw']
-    
     raw_result=query + "\n__RAW_RESULT__:\n"+ json.dumps(result.context_data['raw_result'])
     
     if save_result:
@@ -473,7 +464,7 @@ def summarize(query_id:str,
               response_type="multiple paragraphs",
               community_level=2)->str:
     data_dir, root_dir, config = _configure_paths_and_settings(
-        None, root_dir, None
+        '', root_dir, None
     )
     blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
@@ -515,7 +506,6 @@ def summarize(query_id:str,
         if len(doc) != 1: 
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
-
 
         #list_relationships=dict_json.get("relationships",[])
         list_text_units=dict_json["text_unit_ids"]
@@ -573,7 +563,6 @@ def summarize(query_id:str,
     result = summarizer.summarize(query)
     return result.response
 
-
 def split_raw_response(data):
     delimiter="\n__RAW_RESULT__:\n"
     pdelim=data.find(delimiter)
@@ -587,11 +576,13 @@ def split_raw_response(data):
 
     return query,raw_json
 
-def rrf_scoring(query_ids:str,root_dir:str,k=60):
-    data_dir, root_dir, config = _configure_paths_and_settings(
-        None, root_dir, None
+def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
+
+    _, root_dir, config = _configure_paths_and_settings(
+        '', root_dir, None
     )
     rrf_scores = {}
+    docs={}
     blob_storage_client = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
@@ -599,13 +590,16 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
     query_ids=query_ids.split(',')
     print('RRF over',query_ids)
 
+    query='' # we expect the query to be the same for given raw reponses
     for query_id in query_ids:
         blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
-        q,raw_json=split_raw_response(blob_data)
+        query,raw_json=split_raw_response(blob_data) # query should stay the same
         list_json=json.loads(raw_json)
         for entity_json in list_json:
             for text_unit_id in entity_json["text_unit_ids"]:
                 entity_text_unit = f"{entity_json['entity_id']}:{text_unit_id}"
+                doc_id = entity_json['document_ids']
+                docs[entity_text_unit] = doc_id
                 if entity_text_unit not in rrf_scores:
                     rrf_scores[entity_text_unit] = 0
                 rrf_scores[entity_text_unit]+=1.0/(k+entity_json["rank"]) #assuming rank is stored as an integer
@@ -617,11 +611,17 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
         entity_id = couple[:d]
         text_unit_id=couple[d+1:]
         result.append({'entity_id':entity_id,
-                       'text_unit_id:':text_unit_id,
-                       'rank':rrf_scores[couple]})
+                       'text_unit_ids':[text_unit_id],
+                       'rank':rrf_scores[couple],
+                       'document_ids': docs[couple] }
+                      )
         
 
-    result= json.dumps(result)
+
+    result.sort(key=lambda x : x['rank'],reverse=True)
+    result=result[:top_k]
+
+    result= query + "\n__RAW_RESULT__:\n"+ json.dumps(result)
 
     new_query_id= uuid.uuid4()
     
@@ -630,4 +630,4 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60):
                         ) 
     ) 
 
-    return f"{result}\n\nStored as {new_query_id}"
+    return str(new_query_id)
