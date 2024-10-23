@@ -173,6 +173,12 @@ class LocalSearch(BaseSearch):
         **kwargs,
     ) -> SearchResult:
         """Build local search context data."""
+
+
+        logging.info("Wrong function : optimized_search()")
+        exit(-1)
+
+
         start_time = time.time()
         search_prompt = ""
         context_text, context_records = self.context_builder.build_context(
