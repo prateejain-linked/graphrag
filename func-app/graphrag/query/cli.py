@@ -290,8 +290,8 @@ def cs_search(
     if save_result:
         query_id= uuid.uuid4()
         blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
-                                                                container_name=config.storage.container_name,
-                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+                                                                container_name=config.output_storage.container_name,
+                                                                storage_account_blob_url=config.output_storage.storage_account_blob_url)
         asyncio.run(blob_storage_client.set(
                             f"query/{query_id}/output.json",raw_result
                         ) 
@@ -467,8 +467,8 @@ def summarize(query_id:str,
         '', root_dir, None
     )
     blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
-                                                                container_name=config.storage.container_name,
-                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+                                                                container_name=config.output_storage.container_name,
+                                                                storage_account_blob_url=config.output_storage.storage_account_blob_url)
     
     index_storage_client = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
@@ -584,8 +584,8 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
     rrf_scores = {}
     docs={}
     blob_storage_client = BlobPipelineStorage(connection_string=None,
-                                                                container_name=config.storage.container_name,
-                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+                                                                container_name=config.output_storage.container_name,
+                                                                storage_account_blob_url=config.output_storage.storage_account_blob_url)
     
     query_ids=query_ids.split(',')
     print('RRF over',query_ids)
