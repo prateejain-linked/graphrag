@@ -323,13 +323,13 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             for group in entity_to_related_entities.values():
                 for e in group:
-                    r=Relationship(id=e['id'],short_id=str(r_id),source=e['source'],
-                                        target=e['target'],description=e['description']
+                    r=Relationship(id=e['id'],short_id=str(r_id),source='',
+                                        target='',description='',text_unit_ids=e['text_unit_ids']
                                         ,attributes={'rank':e['rank']}, source_id=e['source_id']
                                         ,target_id=e['target_id'])
                     r_id+=1
                     relationships.append(r)
-                    print("Relationship:",e['source'],">",e['target'])
+
 
             self.relationships = {
                 relationship.id: relationship for relationship in relationships

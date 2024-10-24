@@ -207,9 +207,6 @@ class GraphDBClient:
                     .by(inV().values('id'))
                     .by('weight')
                     .by('text_unit_ids')
-                    .by('description')
-                    .by(coalesce(values('source'), constant ('')))
-                    .by(coalesce(values('target'), constant ('')))
                     .by(coalesce(values('rank'), constant (0)))
                 .group()
                     .by(select('source_id', 'target_id'))
@@ -234,13 +231,10 @@ class GraphDBClient:
                 target_id = row['target_id']
                 weight = row['weight']
                 text_unit_ids = row['text_unit_ids']
-                description = row['description']
-                source = row['source']
-                target = row['target']
                 rank=row['rank']
                 related_entity_id = source_id if source_id != entity_id else target_id
                 json_data.append({'id':id,'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,
-                                    'description':description, 'source':source, 'target':target,'rank':rank,
+                                    'rank':rank,
                                     'source_id':source_id, 'target_id':target_id})
 
 
