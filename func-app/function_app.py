@@ -55,10 +55,7 @@ def indexing(mytimer: func.TimerRequest) -> None:
     targets = find_next_target_index_blob(queue_storage_client=queue_client, watermark_client=watermark_client, caller='context')
     if len(targets) <= 0:
         logging.info("No target to index. Silently skipping the iteration")
-        return func.HttpResponse(
-            "No content to polled for the context",
-            status_code=200
-        )
+        return
 
     #file_targets: list[str] = []
     for target in targets:
