@@ -282,7 +282,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         )
 
 
-        print("Selected entities titles: ", [entity.title for entity in selected_entities])
+        #print("Selected entities titles: ", [entity.title for entity in selected_entities])
 
 
         if selected_entities==[]:
@@ -312,7 +312,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     entity_to_related_entities[e] = graphdb_client.get_top_related_unique_edges(e, top_k_relationships) 
 
 
-            print("Related entities: ", entity_to_related_entities)
+            #print("Related entities: ", entity_to_related_entities)
             
             # POST RETRIEVAL RELATIONSHIP DATA TO PASS TO LLM
             # THIS PART REPLACES graphdb operation in get_[in/out]network_relationship
