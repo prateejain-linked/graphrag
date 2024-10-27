@@ -227,7 +227,7 @@ class ContextSwitcher:
             graph = database.create_container_if_not_exists(
                 id=graph_name,
                 partition_key=PartitionKey(path='/category'),
-                offer_throughput=400
+                offer_throughput=4000
             )
             graph_db_client = GraphDBClient(config.graphdb,context_id)
 
