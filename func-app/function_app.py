@@ -5,7 +5,7 @@ import logging
 import csv
 import codecs
 from graphrag.index.cli import index_cli
-import os 
+import os
 
 from graphrag.query.cli import run_local_search, summarize,rrf_scoring
 from time import sleep

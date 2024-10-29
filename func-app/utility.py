@@ -9,8 +9,7 @@ from azure.storage.blob import BlobClient
 from azure.storage.queue import QueueServiceClient, QueueClient, QueueMessage, BinaryBase64DecodePolicy, BinaryBase64EncodePolicy
 import asyncio
 
-
-def find_next_target_blob(queue_storage_client: QueueStorageClient, watermark_client: BlobPipelineStorage):
+def find_next_target_index_blob(queue_storage_client: QueueStorageClient, watermark_client: BlobPipelineStorage, caller: str):
     # queue_url="https://inputdatasetsa.queue.core.windows.net",
     # queue_name="inputdataetqu"
     # client_id = "500051c4-c242-4018-9ae4-fb983cfebefd"
@@ -25,32 +24,52 @@ def find_next_target_blob(queue_storage_client: QueueStorageClient, watermark_cl
         content = str(base64.b64decode(message.content).decode('utf-8'))
         target_blob = BlobClient.from_blob_url(json.loads(content)['data']['url']).blob_name
         
-        if check_if_watermark_exitst(target_blob=target_blob, watermark_client=watermark_client) is True:
+        if check_if_watermark_exitst(target_blob=target_blob, watermark_client=watermark_client, caller=caller) is True:
             queue_storage_client.delete_message(message)
         else:
-            target_blob = parse_message_get_blob(message=message)
-            to_process_msgs.append([target_blob, message])
+            target_blob = parse_message_get_blob(message=message, caller=caller)
+            target_blob.append(message)
+            to_process_msgs.append(target_blob)
     
     
     return to_process_msgs
 
-def parse_message_get_blob(message: QueueMessage) -> str:
-    content = str(base64.b64decode(message.content).decode('utf-8'))
-    target_blob_url = json.loads(content)['data']['url']
-    blob_client = BlobClient.from_blob_url(target_blob_url)
+def parse_message_get_blob(message: QueueMessage, caller: str) -> str:
+    if caller == 'indexer':
+        content = str(base64.b64decode(message.content).decode('utf-8'))
+        target_blob_url = json.loads(content)['data']['url']
+        blob_client = BlobClient.from_blob_url(target_blob_url)
 
-    return blob_client.blob_name
+        return [blob_client.blob_name, blob_client.blob_name]
+    
+    if caller == 'context':
+        content = str(base64.b64decode(message.content).decode('utf-8'))
+        target_blob_url = json.loads(content)['data']['url']
+        blob_client = BlobClient.from_blob_url(target_blob_url)
+
+        blob_name = blob_client.blob_name.split("/")[-1]
+
+        return [blob_client.blob_name, f"{blob_name}/version=0"]
 
 
-def check_if_watermark_exitst(target_blob: str, watermark_client: BlobPipelineStorage) -> bool:
-    keys = { "key" : target_blob }
-    target_guid = gen_md5_hash(keys, keys.keys())
-    target_watermark_blob = f"{target_guid}.watermark"
-    result : bool = watermark_client.check_if_exists(target_watermark_blob)
 
-    return result
+def check_if_watermark_exitst(target_blob: str, watermark_client: BlobPipelineStorage, caller: str) -> bool:
+    if caller == 'indexer':
+        keys = { "key" : target_blob }
+        target_guid = gen_md5_hash(keys, keys.keys())
+        target_watermark_blob = f"{target_guid}.watermark"
+        result : bool = watermark_client.check_if_exists(target_watermark_blob)
+        return result
 
-def water_mark_target(targets: list, queue_storage_client: QueueStorageClient, watermark_client: BlobPipelineStorage):
+    if caller == 'context':
+        if target_blob.endswith('_init.json'):
+            return True
+        else:
+            return False
+    
+    return True
+
+def water_mark_target(targets: list, queue_storage_client: QueueStorageClient, watermark_client: BlobPipelineStorage, path_prefix: str = None):
     for target in targets:
         key = target[0]
         message : QueueMessage = target[1]
@@ -58,6 +77,8 @@ def water_mark_target(targets: list, queue_storage_client: QueueStorageClient, w
         keys = { "key" : key }
         target_guid = gen_md5_hash(keys, keys.keys())
         target_watermark_blob = f"{target_guid}.watermark"
+        if path_prefix is not None and len(path_prefix) > 0:
+            target_watermark_blob = f"{path_prefix}/{target_guid}.watermark"
         asyncio.run(watermark_client.set(key=target_watermark_blob, value=""))
 
         queue_storage_client.delete_message(message=message)

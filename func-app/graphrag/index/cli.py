@@ -106,8 +106,8 @@ def load_doc_stats(in_base:str,out_base:str,folders,context_id,config_args):
 
     def get_file_hash(path):
         '''
-            NOTE: Openning the file in text instead of bytes mode might result in 
-            wrong hashes. But since graphrag does this, I'll keep it this way here as well 
+            NOTE: Openning the file in text instead of bytes mode might result in
+            wrong hashes. But since graphrag does this, I'll keep it this way here as well
             for conssitency and to get the same hashes here and in text.py.
             usedforsecurity param is also not necessary.
         '''
@@ -137,7 +137,7 @@ def load_doc_stats(in_base:str,out_base:str,folders,context_id,config_args):
     kusto.load_doc_stats(doc_stats)
 
     logging.info("Documents stats loaded in kusto.")
-    
+
 
 def index_cli(
     root: str,
@@ -164,7 +164,7 @@ def index_cli(
     run_id = resume or time.strftime("%Y%m%d-%H%M%S")
     _enable_logging(root, run_id, verbose)
     progress_reporter = _get_progress_reporter("none")
-    if init: 
+    if init:
         _initialize_project_at(root, progress_reporter)
     if overlay_defaults:
         pipeline_config: str | PipelineConfig = _create_default_config(
@@ -236,7 +236,7 @@ def index_cli(
     if not context_id:
         logging.error('Must pass context_id')
         exit(-1)
-        
+
     ################ CONTEXT SWITCHING
     if context_operation:
         #if not is_valid_guid(context_id):
@@ -254,7 +254,7 @@ def index_cli(
                 use_kusto_community_reports=use_kusto_community_reports,
             )
         return
-    
+
 
     ################ INDEXING ITERATION
     orig_storage_base=pipeline_config.storage.base_dir
@@ -271,7 +271,7 @@ def index_cli(
     if not os.path.exists(batch_stat_f):
         f=open(batch_stat_f,"w")
         f.close()
-    
+
     f=open(batch_stat_f,"r+")
     f.seek(0,0)
     c=f.read()
@@ -279,7 +279,7 @@ def index_cli(
         batch_f_index=int(c)
     else:
         batch_f_index=0
-    
+
     logging.info("Current batch: "+ str(batch_f_index))
     end = min(i_count,batch_f_index+batch_size)
     i_start=batch_f_index
@@ -299,12 +299,12 @@ def index_cli(
 
         logging.info("Working with input "+pipeline_config.input.base_dir)
         logging.info("out "+pipeline_config.storage.base_dir)
-        
+
         cache = NoopPipelineCache() if nocache else None
         pipeline_emit = emit.split(",") if emit else None
         encountered_errors = False
 
-        
+
 
         _run_workflow_async()
         progress_reporter.stop()
@@ -316,13 +316,13 @@ def index_cli(
             #exit(-1)
         else:
             progress_reporter.success("All workflows completed successfully.")
-            
-            
+
+
             batch_f_index += 1
             logging.info("Updating batch file index: "+str(batch_f_index))
             f.seek(0,0)
             f.write(str(batch_f_index))
-    
+
     f.close()
 
 
@@ -330,7 +330,7 @@ def index_cli(
 def _switch_context(root: str, config: str,
                     reporter: ProgressReporter, context_operation: str | None,
                     context_id: str, community_level: int, optimized_search: bool,
-                    use_kusto_community_reports: bool) -> None:
+                    use_kusto_community_reports: bool, files: list[str]) -> None:
     """Switch the context to the given context."""
     reporter.info(f"Switching context to {context_id} using operation {context_operation}")
     logging.info("Switching context to {context_id}")
@@ -360,7 +360,7 @@ def _initialize_project_at(path: str, reporter: ProgressReporter) -> None:
         root.mkdir(parents=True, exist_ok=True)
 
     settings_yaml = root / "settings/settings.yaml"
-    
+
     dotenv = root / ".env"
     if not dotenv.exists():
         with settings_yaml.open("wb") as file:

@@ -132,7 +132,7 @@ class ContextSwitcher:
         reporter.info("Reading settings from environment variables")
         return create_graphrag_config(root_dir=root)
 
-    def activate(self):
+    def activate(self, files:list[str]=[]):
         """Activate the context."""
         #1. read the context id to fileId mapping.
         #2. read the file from storage using common/blob_storage_client.py
@@ -203,8 +203,13 @@ class ContextSwitcher:
         if(config.storage.type == StorageType.file):
             input_storage_client: PipelineStorage = FilePipelineStorage(config.root_dir)
 
-        data_paths = []
-        data_paths = get_files_by_contextid(config, context_id)
+        data_paths : list[str] = []
+        if(len(files) > 0):
+            logging.info("Using files passed from query")
+            data_paths=files
+        else:
+            logging.info("reading files from settings files")
+            data_paths = get_files_by_contextid(config, context_id)
         final_nodes = pd.DataFrame()
         final_community_reports = pd.DataFrame()
         final_text_units = pd.DataFrame()
@@ -215,7 +220,7 @@ class ContextSwitcher:
 
         if len(data_paths) > 1:
             raise ValueError("Place only one datapath in files. Will auto-itrate through internal folders.")
-        
+
 
         if config.graphdb.enabled:
             cosmos_client = CosmosClient(
@@ -236,41 +241,20 @@ class ContextSwitcher:
         if db_enabled:
             description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
 
-        dirs=os.listdir(data_paths[0])
-        i_count=len(dirs)
-        vector_store_args = (
-                config.embeddings.vector_store if config.embeddings.vector_store else {}
-        )
-
-        reporter.info(f"Vector Store Args: {vector_store_args}")
-
-        if "type" not in vector_store_args:
-            ValueError("vectore_store.type can't be empty")
-
-        vector_store_type = vector_store_args.get("type")
-
-        if vector_store_type != VectorStoreType.Kusto:
-            ValueError("Context switching is only supporeted for vectore_store.type=kusto ")
-
-        vmap={}
-
-        #for p_id in range(i_count):
-        for dir in dirs:
-            data_path=f"{data_paths[0]}\\{dir}\\version=0"
-            #data_path=f"{data_paths[0]}\\{p_id}" #windows
-            #data_path=f"{data_paths[0]}/{p_id}" #linux
+        added_vertices = set()
+        for data_path in data_paths:
+            path_prefix = data_path
+            if len(config.storage.base_dir) > 0:
+                path_prefix = f"{config.storage.base_dir}/{data_path}"
             #check from the config for the ouptut storage type and then read the data from the storage.
             logging.info("Working with "+data_path)
             #GraphDB: we may need to make change below to read nodes data from Graph DB
-            final_nodes = read_paraquet_file(input_storage_client, data_path + "/create_final_nodes.parquet")
-            final_community_reports = read_paraquet_file(input_storage_client, data_path + "/create_final_community_reports.parquet") # KustoDB: Final_entities, Final_Nodes, Final_report should be merged and inserted to kusto
-            final_text_units = read_paraquet_file(input_storage_client, data_path + "/create_final_text_units.parquet") # lance db search need it for embedding mapping. we have embeddings in entities we should use from there. KustoDB already must have sorted it.
+            final_nodes = read_paraquet_file(input_storage_client, path_prefix + "/create_final_nodes.parquet")
+            final_community_reports = read_paraquet_file(input_storage_client, path_prefix + "/create_final_community_reports.parquet") # KustoDB: Final_entities, Final_Nodes, Final_report should be merged and inserted to kusto
+            final_text_units = read_paraquet_file(input_storage_client, path_prefix + "/create_final_text_units.parquet") # lance db search need it for embedding mapping. we have embeddings in entities we should use from there. KustoDB already must have sorted it.
 
-            if not optimized_search:
-                final_covariates = read_paraquet_file(input_storage_client, data_path + "/create_final_covariates.parquet")
-
-            final_relationships = read_paraquet_file(input_storage_client, data_path + "/create_final_relationships.parquet")
-            final_entities = read_paraquet_file(input_storage_client, data_path + "/create_final_entities.parquet")
+            final_relationships = read_paraquet_file(input_storage_client, path_prefix + "/create_final_relationships.parquet")
+            final_entities = read_paraquet_file(input_storage_client, path_prefix + "/create_final_entities.parquet")
 
             if len(final_nodes)==0:
                 logging.info("Empty table. Skipping to next instance")
@@ -288,7 +272,7 @@ class ContextSwitcher:
 
                 for u in text_units:
                     u.text=''
-     
+
             if db_enabled:
                 logging.info(f"loading {len(entities)} entities in kusto")
                 description_embedding_store.load_entities(entities)
@@ -303,6 +287,7 @@ class ContextSwitcher:
                 graph_db_client.write_edges(final_relationships)
 
         if config.graphdb.enabled:
+            graph_db_client.wait_for_jobs()
             graph_db_client._client.close()
 
         logging.info("Operation completed. Loaded all instances.")

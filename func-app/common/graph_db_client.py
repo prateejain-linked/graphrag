@@ -32,6 +32,7 @@ class GraphDBClient:
             password=token,
             message_serializer=serializer.GraphSONSerializersV2d0(),
         )
+        self.running_jobs = set()
 
     def result_to_df(self,result) -> pd.DataFrame:
         json_data = []
@@ -89,99 +90,73 @@ class GraphDBClient:
             element_count=counts[0]
         return element_count>0
 
-    def write_vertices(self,data: pd.DataFrame,vmap)->None:
-        step_df=50
-        logging.info("start")
-        split_dataframes=[data[i:i+step_df] for i in range(0,len(data),step_df)]
-        
-        for spilt_df in split_dataframes:
-            q="g"
-            query_bindings={}
-            iter_row=0
-
-            for row in spilt_df.itertuples():
-                
-                #if self.element_exists("g.V()",row.id):
-                #    continue
-                
-                if row.id in vmap:
-                    continue
-                    
-                vmap[row.id]=1
-
-                q+=(
-                    ".addV('entity')"
-                    ".property('id', prop_id"+str(iter_row)+")"
-                    ".property('name', prop_name"+str(iter_row)+")"
-                    ".property('type', prop_type"+str(iter_row)+")"
-                    ".property('description', prop_description"+str(iter_row)+")"
-                    ".property('human_readable_id', prop_human_readable_id"+str(iter_row)+")"
-                    ".property('category', 'entities')"
+    def write_vertices(self,data: pd.DataFrame, added_vertices: set)->None:
+        for row in data.itertuples():
+            if row.id not in added_vertices:
+                added_vertices.add(row.id)
+                rs = self._client.submit(
+                    message=(
+                        "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
+                        "g.addV('entity')"
+                        ".property('id', prop_id)"
+                        ".property('name', prop_name)"
+                        ".property('type', prop_type)"
+                        ".property('description','prop_description')"
+                        ".property('human_readable_id', prop_human_readable_id)"
+                        ".property('category', prop_partition_key)"
+                        ".property(list,'description_embedding',prop_description_embedding)"
+                        ".property(list,'graph_embedding',prop_graph_embedding)"
+                        ".property(list,'text_unit_ids',prop_text_unit_ids))"
+                    ),
+                    bindings={
+                        "prop_id": row.id,
+                        "prop_name": row.name,
+                        "prop_type": row.type,
+                        "prop_description": row.description,
+                        "prop_human_readable_id": row.human_readable_id,
+                        "prop_partition_key": "entities",
+                        "prop_description_embedding":json.dumps(row.description_embedding.tolist() if row.description_embedding is not None else []),
+                        "prop_graph_embedding":json.dumps(row.graph_embedding.tolist() if row.graph_embedding is not None else []),
+                        "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
+                    },
                 )
-                query_bindings.update({
-                    ("prop_id"+str(iter_row)): row.id,
-                    ("prop_name"+str(iter_row)): row.name,
-                    ("prop_type"+str(iter_row)): row.type,
-                    ("prop_description"+str(iter_row)): row.description,
-                    ("prop_human_readable_id"+str(iter_row)): row.human_readable_id,
-                })
-                iter_row+=1
-
-            ##########################################################################
-
-            self._client.submit(
-                message=q,
-                bindings=query_bindings
-            )
-
-        logging.info("end")
+                self.running_jobs.add(rs)
 
     def write_edges(self,data: pd.DataFrame)->None:
-        step_df=100
-        split_dataframes=[data[i:i+step_df] for i in range(0,len(data),step_df)]
-        for spilt_df in split_dataframes:
-            q="g"
-            query_bindings={}
-            iter_row=0
-            for row in spilt_df.itertuples():
-                #if self.element_exists("g.E()",row.id):
-                #    continue
-                q+=(
-                    ".V().has('name',prop_source_id"+str(iter_row)+")"
+        for row in data.itertuples():
+            rs = self._client.submit(
+                message=(
+                    "g.V().has('name',prop_source_id)"
                     ".addE('connects')"
-                    ".to(g.V().has('name',prop_target_id"+str(iter_row)+"))"
-                    ".property('weight',prop_weight"+str(iter_row)+")"
-                    ".property('description',prop_description"+str(iter_row)+")"
-                    ".property('id',prop_id"+str(iter_row)+")"
-                    ".property('human_readable_id',prop_human_readable_id"+str(iter_row)+")"
-                    ".property('source_degree',prop_source_degree"+str(iter_row)+")"
-                    ".property('target_degree',prop_target_degree"+str(iter_row)+")"
-                    ".property('rank',prop_rank"+str(iter_row)+")"
-                    ".property('source',prop_source"+str(iter_row)+")"
-                    ".property('target',prop_target"+str(iter_row)+")"
-                    ".property(list,'text_unit_ids',prop_text_unit_ids"+str(iter_row)+")"
-                )
-                query_bindings.update({
-                    ("prop_source_id"+str(iter_row)): row.source,
-                    ("prop_target_id"+str(iter_row)): row.target,
-                    ("prop_weight"+str(iter_row)): row.weight,
-                    ("prop_description"+str(iter_row)): row.description,
-                    ("prop_id"+str(iter_row)): row.id,
-                    ("prop_human_readable_id"+str(iter_row)): row.human_readable_id,
-                    ("prop_source_degree"+str(iter_row)): row.source_degree,
-                    ("prop_target_degree"+str(iter_row)): row.target_degree,
-                    ("prop_rank"+str(iter_row)): row.rank,
-                    ("prop_source"+str(iter_row)): row.source,
-                    ("prop_target"+str(iter_row)): row.target,
-                    ("prop_text_unit_ids"+str(iter_row)):json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
-                })
-                iter_row+=1
-
-
-            self._client.submit(
-                message=q,
-                bindings=query_bindings
+                    ".to(g.V().has('name',prop_target_id))"
+                    ".property('weight',prop_weight)"
+                    ".property(list,'text_unit_ids',prop_text_unit_ids)"
+                    ".property('description',prop_description)"
+                    ".property('id',prop_id)"
+                    ".property('human_readable_id',prop_human_readable_id)"
+                    ".property('source_degree',prop_source_degree)"
+                    ".property('target_degree',prop_target_degree)"
+                    ".property('rank',prop_rank)"
+                    ".property('source',prop_source)"
+                    ".property('target',prop_target)"
+                ),
+                bindings={
+                    "prop_partition_key": "entities",
+                    "prop_source_id": row.source,
+                    "prop_target_id": row.target,
+                    "prop_weight": row.weight,
+                    "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
+                    "prop_description": row.description,
+                    "prop_id": row.id,
+                    "prop_human_readable_id": row.human_readable_id,
+                    "prop_source_degree": row.source_degree,
+                    "prop_target_degree": row.target_degree,
+                    "prop_rank": row.rank,
+                    "prop_source": row.source,
+                    "prop_target": row.target,
+                },
             )
+            self.running_jobs.add(rs)
 
     def get_top_related_unique_edges(self, entity_id: str, top: int) -> [dict[str, str]]:
         """Retrieve the top related unique edges for a given entity.
@@ -196,7 +171,7 @@ class GraphDBClient:
         -------
             A list of dictionaries containing the related entity IDs, weights, and text unit IDs.
         """
- 
+
         #Load relationships
         m=(
                 f"""g.V().has('id', '{entity_id}')
@@ -242,3 +217,13 @@ class GraphDBClient:
         #####################################################################
 
         return json_data
+
+    def wait_for_jobs(self):
+        """Wait for all running jobs to complete."""
+        try:
+            for job in self.running_jobs:
+                job.all().result()
+            self.running_jobs.clear()
+        except Exception as e:
+            print(f"Error writing to graph: {e}")
+            raise e

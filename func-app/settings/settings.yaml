@@ -65,7 +65,7 @@ chunks:
   size: 500
   overlap: 100
   group_by_columns: [id] # by default, we don't allow chunks to cross documents
-    
+
 input:
   type: blob
   file_type: text # or csv
