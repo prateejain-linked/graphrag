@@ -21,18 +21,20 @@ from graphrag.config import (
 )
 from graphrag.config.enums import StorageType
 from graphrag.model.community_report import CommunityReport
-from graphrag.model import TextUnit
+from graphrag.model import TextUnit,Relationship
 from graphrag.model.entity import Entity
 from graphrag.query.indexer_adapters import (
     read_indexer_entities,
     read_indexer_reports,
     read_indexer_text_units,
+    read_indexer_relationships
 )
 from graphrag.model.entity import Entity
 from azure.cosmos import CosmosClient, PartitionKey
 from graphrag.vector_stores.base import BaseVectorStore
 from graphrag.vector_stores.typing import VectorStoreFactory, VectorStoreType
 import logging
+from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
 
 class ContextSwitcher:
     """ContextSwitcher class definition."""
@@ -73,6 +75,7 @@ class ContextSwitcher:
 
 
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
+        config_args.update({"relationships_name": f"relationships_{self.context_id}"})
         config_args.update({"docs_tbl_name": ''})
 
         return VectorStoreFactory.get_vector_store(
@@ -92,6 +95,7 @@ class ContextSwitcher:
             description_embedding_store.setup_reports()
 
         description_embedding_store.setup_text_units()
+        description_embedding_store.setup_relationships()
 
         return description_embedding_store
 
@@ -187,7 +191,8 @@ class ContextSwitcher:
             return self._read_config_parameters(root or "./", config_dir)
 
         ################################################################################
-
+        #print("ctx switch is disabled")
+        #exit(-1)
 
         _, _, config = _configure_paths_and_settings(
             data_dir, root_dir, config_dir
@@ -256,7 +261,8 @@ class ContextSwitcher:
 
         #for p_id in range(i_count):
         for dir in dirs:
-            data_path=f"{data_paths[0]}\\{dir}\\version=0"
+            #data_path=f"{data_paths[0]}\\{dir}\\version=0"
+            data_path=f"{data_paths[0]}\\{dir}"
             #data_path=f"{data_paths[0]}\\{p_id}" #windows
             #data_path=f"{data_paths[0]}/{p_id}" #linux
             #check from the config for the ouptut storage type and then read the data from the storage.
@@ -279,8 +285,33 @@ class ContextSwitcher:
             entities = read_indexer_entities(final_nodes, final_entities, community_level) # KustoDB: read Final nodes data and entities data and merge it.
             reports = read_indexer_reports(final_community_reports, final_nodes, community_level)
             text_units = read_indexer_text_units(final_text_units)
+            relationships_aggergate=read_indexer_relationships(final_relationships)
+
+
+            txt_hmap = {}
+            for unit in text_units:
+                txt_hmap[unit.id] = unit.text_embedding
+
+            relationships = []
+            for r in relationships_aggergate:
+                r_per_txt = [] 
+                txt_units = r.text_unit_ids
+                for unit in txt_units:
+                    new_r= Relationship(source='',
+                                        target='',    
+                                        source_id=generate_entity_id(r.source),
+                                        target_id = generate_entity_id(r.target),
+                                        text_unit_embedding = txt_hmap[unit],
+                                        text_unit_ids=[unit],
+                                        id=r.id,
+                                        short_id=r.short_id)
+                    
+                    r_per_txt.append(new_r)
+
+                relationships += r_per_txt
 
             hide_sensitive_info=False
+
             if hide_sensitive_info:
                 for e in entities:
                     e.title=''
@@ -297,6 +328,7 @@ class ContextSwitcher:
                     #description_embedding_store.load_reports(reports)
 
                 description_embedding_store.load_text_units(text_units)
+                description_embedding_store.load_relationships(relationships)
 
             if config.graphdb.enabled:
                 graph_db_client.write_vertices(final_entities,vmap)
