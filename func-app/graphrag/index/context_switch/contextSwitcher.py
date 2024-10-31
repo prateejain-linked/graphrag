@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import cast
 
 import pandas as pd
-from time import sleep
 
 from common.graph_db_client import GraphDBClient
 from graphrag.common.progress import ProgressReporter
@@ -70,10 +69,11 @@ class ContextSwitcher:
         )
         config_args.update({"vector_name": vector_name})
         config_args.update({"reports_name": f"reports_{self.context_id}"})
+        config_args.update({"text_units_name": f"text_units_{self.context_id}"})
+        config_args.update({"docs_tbl_name": f"docs_{self.context_id}"})
 
 
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
-        config_args.update({"docs_tbl_name": ''})
 
         return VectorStoreFactory.get_vector_store(
             vector_store_type=VectorStoreType.Kusto, kwargs=config_args
@@ -101,10 +101,10 @@ class ContextSwitcher:
         settings_yaml = (
             Path(config)
             if config and Path(config).suffix in [".yaml", ".yml"]
-            else _root / "settings.yaml"
+            else _root / "settings/settings.yaml"
         )
         if not settings_yaml.exists():
-            settings_yaml = _root / "settings.yml"
+            settings_yaml = _root / "settings/settings.yml"
 
         if settings_yaml.exists():
             reporter.info(f"Reading settings from {settings_yaml}")
@@ -119,7 +119,7 @@ class ContextSwitcher:
         settings_json = (
             Path(config)
             if config and Path(config).suffix == ".json"
-            else _root / "settings.json"
+            else _root / "settings/settings.json"
         )
         if settings_json.exists():
             reporter.info(f"Reading settings from {settings_json}")
@@ -162,7 +162,7 @@ class ContextSwitcher:
                 msg = "Either data_dir or root_dir must be provided."
                 raise ValueError(msg)
             if data_dir is None:
-                data_dir = _infer_data_dir(cast(str, root_dir))
+                data_dir = root_dir #_infer_data_dir(cast(str, root_dir))
             config = _create_graphrag_config(root_dir, config_dir)
             return data_dir, root_dir, config
 
@@ -213,10 +213,6 @@ class ContextSwitcher:
         final_covariates = pd.DataFrame()
         graph_db_client=None
 
-        if len(data_paths) > 1:
-            raise ValueError("Place only one datapath in files. Will auto-itrate through internal folders.")
-        
-
         if config.graphdb.enabled:
             cosmos_client = CosmosClient(
                 f"{config.graphdb.cosmos_url}",
@@ -232,9 +228,7 @@ class ContextSwitcher:
             )
             graph_db_client = GraphDBClient(config.graphdb,context_id)
 
-        db_enabled=True #used to isolate cosmos db tests
-        if db_enabled:
-            description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
+        description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
 
         dirs=os.listdir(data_paths[0])
         i_count=len(dirs)
@@ -260,7 +254,7 @@ class ContextSwitcher:
             #data_path=f"{data_paths[0]}\\{p_id}" #windows
             #data_path=f"{data_paths[0]}/{p_id}" #linux
             #check from the config for the ouptut storage type and then read the data from the storage.
-            logging.info("Working with "+data_path)
+
             #GraphDB: we may need to make change below to read nodes data from Graph DB
             final_nodes = read_paraquet_file(input_storage_client, path_prefix + "/create_final_nodes.parquet")
             final_community_reports = read_paraquet_file(input_storage_client, path_prefix + "/create_final_community_reports.parquet") # KustoDB: Final_entities, Final_Nodes, Final_report should be merged and inserted to kusto
@@ -269,41 +263,38 @@ class ContextSwitcher:
             final_relationships = read_paraquet_file(input_storage_client, path_prefix + "/create_final_relationships.parquet")
             final_entities = read_paraquet_file(input_storage_client, path_prefix + "/create_final_entities.parquet")
 
-            if len(final_nodes)==0:
-                logging.info("Empty table. Skipping to next instance")
-                continue
+            vector_store_args = (
+                config.embeddings.vector_store if config.embeddings.vector_store else {}
+            )
+
+            reporter.info(f"Vector Store Args: {vector_store_args}")
+
+            if "type" not in vector_store_args:
+                ValueError("vectore_store.type can't be empty")
+
+            vector_store_type = vector_store_args.get("type")
+
+            if vector_store_type != VectorStoreType.Kusto:
+                ValueError("Context switching is only supporeted for vectore_store.type=kusto ")
 
             entities = read_indexer_entities(final_nodes, final_entities, community_level) # KustoDB: read Final nodes data and entities data and merge it.
             reports = read_indexer_reports(final_community_reports, final_nodes, community_level)
             text_units = read_indexer_text_units(final_text_units)
 
-            hide_sensitive_info=False
-            if hide_sensitive_info:
-                for e in entities:
-                    e.title=''
-                    e.description=''
+            description_embedding_store.load_entities(entities)
+            if self.use_kusto_community_reports:
+                raise ValueError("Community reports not supported for kusto.")
+                #description_embedding_store.load_reports(reports)
 
-                for u in text_units:
-                    u.text=''
-     
-            if db_enabled:
-                logging.info(f"loading {len(entities)} entities in kusto")
-                description_embedding_store.load_entities(entities)
-                if self.use_kusto_community_reports:
-                    raise ValueError("Community reports not supported for kusto.")
-                    #description_embedding_store.load_reports(reports)
-
-                description_embedding_store.load_text_units(text_units)
+            description_embedding_store.load_text_units(text_units)
 
             if config.graphdb.enabled:
-                graph_db_client.write_vertices(final_entities,vmap)
+                graph_db_client.write_vertices(final_entities, added_vertices)
                 graph_db_client.write_edges(final_relationships)
 
         if config.graphdb.enabled:
             graph_db_client.wait_for_jobs()
             graph_db_client._client.close()
-
-        logging.info("Operation completed. Loaded all instances.")
 
     def deactivate(self):
         """DeActivate the context."""
