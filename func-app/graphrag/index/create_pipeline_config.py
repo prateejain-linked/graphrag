@@ -354,6 +354,8 @@ def _graph_workflows(
                         "collection_name": "entity_description_embeddings",
                         "vector_name": "vector",
                         "reports_name": "reports",
+                        "text_units_name": "text_units",
+                        "docs_tbl_name": "docs_tbl",
                     },
                 ),
                 "skip_name_embedding": skip_entity_name_embedding,
