@@ -99,7 +99,6 @@ class GraphDBClient:
                         ".property('description','prop_description')"
                         ".property('human_readable_id', prop_human_readable_id)"
                         ".property('category', prop_partition_key)"
-                        ".property(list,'description_embedding',prop_description_embedding)"
                         ".property(list,'graph_embedding',prop_graph_embedding)"
                         ".property(list,'text_unit_ids',prop_text_unit_ids)"
                     ),
@@ -110,7 +109,6 @@ class GraphDBClient:
                         "prop_description": row.description,
                         "prop_human_readable_id": row.human_readable_id,
                         "prop_partition_key": "entities",
-                        "prop_description_embedding":json.dumps(row.description_embedding.tolist() if row.description_embedding is not None else []),
                         "prop_graph_embedding":json.dumps(row.graph_embedding.tolist() if row.graph_embedding is not None else []),
                         "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
                     },
@@ -169,7 +167,9 @@ class GraphDBClient:
             message=(
                 f"""g.V().has('id', '{entity_id}')
                   .bothE('connects')
-                  .project('source_id', 'target_id', 'weight','text_unit_ids')
+                  .project('source_entity_id','target_entity_id','source_id', 'target_id', 'weight','text_unit_ids','id','description','rank')
+                    .by(__.outV().id())
+                    .by(__.inV().id())
                     .by(outV().values('id'))
                     .by(inV().values('id'))
                     .by('weight')
@@ -190,11 +190,11 @@ class GraphDBClient:
         json_data = []
         for rows in result:
             for row in rows:
-                source_id = row['source_id']
-                target_id = row['target_id']
+                source_id = row['source_entity_id']
+                target_id = row['target_entity_id']
                 weight = row['weight']
                 text_unit_ids = row['text_unit_ids']
                 related_entity_id = source_id if source_id != entity_id else target_id
-                json_data.append({'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids})
+                json_data.append({'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,'id':row['id'],'source':source_id,'target':target_id,'description':row['description'],'rank':row['rank']})
 
         return json_data

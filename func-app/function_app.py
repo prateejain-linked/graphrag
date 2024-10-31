@@ -207,4 +207,3 @@ def index(mytimer: func.TimerRequest) -> None:
 
 '''
     
-

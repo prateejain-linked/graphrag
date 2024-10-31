@@ -3,7 +3,9 @@
 
 """Command line interface for the query module."""
 
+import ast
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import cast
@@ -514,6 +516,7 @@ def summarize(query_id:str,
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
 
+
         #list_relationships=dict_json.get("relationships",[])
         list_text_units=dict_json["text_unit_ids"]
 
@@ -569,6 +572,7 @@ def summarize(query_id:str,
     )
     result = summarizer.summarize(query)
     return result.response
+
 
 def split_raw_response(data):
     delimiter="\n__RAW_RESULT__:\n"

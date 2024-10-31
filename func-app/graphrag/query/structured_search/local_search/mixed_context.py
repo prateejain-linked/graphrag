@@ -3,6 +3,7 @@
 """Algorithms to build context data for local search prompt."""
 
 import logging
+import time
 from typing import Any
 import ast
 import json
@@ -164,6 +165,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 conversation_history.get_user_turns(conversation_history_max_turns)
             )
             query = f"{query}\n{pre_user_questions}"
+
 
 
         preselected_entities, selected_entities, entity_to_related_entities = [], [], []
