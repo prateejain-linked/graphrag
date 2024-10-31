@@ -120,7 +120,7 @@ def context_poll(req: func.HttpRequest) -> func.HttpResponse:
     #file_targets: list[str] = []
     for target in targets:
         file_target = target[1]
-        #input for the artifcact storage account
+        #input for the artifact storage account
         # context switching for all the target blobs.
         context_id = target[0].split("/")[0]
         try:
