@@ -22,7 +22,8 @@ def build_steps(
     base_text_embed = config.get("text_embed", {})
     text_unit_text_embed_config = config.get("text_unit_text_embed", base_text_embed)
     covariates_enabled = config.get("covariates_enabled", False)
-    skip_text_unit_embedding = config.get("skip_text_unit_embedding", False)
+    #skip_text_unit_embedding = config.get("skip_text_unit_embedding", False)
+    skip_text_unit_embedding = False # Force adding texut unit embedding, "target: all" is not what we want
     is_using_vector_store = (
         text_unit_text_embed_config.get("strategy", {}).get("vector_store", None)
         is not None

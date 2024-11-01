@@ -20,18 +20,20 @@ from graphrag.config import (
 )
 from graphrag.config.enums import StorageType
 from graphrag.model.community_report import CommunityReport
-from graphrag.model import TextUnit
+from graphrag.model import TextUnit,Relationship
 from graphrag.model.entity import Entity
 from graphrag.query.indexer_adapters import (
     read_indexer_entities,
     read_indexer_reports,
     read_indexer_text_units,
+    read_indexer_relationships
 )
 from graphrag.model.entity import Entity
 from azure.cosmos import CosmosClient, PartitionKey
 from graphrag.vector_stores.base import BaseVectorStore
 from graphrag.vector_stores.typing import VectorStoreFactory, VectorStoreType
 import logging
+from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
 
 class ContextSwitcher:
     """ContextSwitcher class definition."""
@@ -71,7 +73,7 @@ class ContextSwitcher:
         config_args.update({"reports_name": f"reports_{self.context_id}"})
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
         config_args.update({"docs_tbl_name": f"docs_{self.context_id}"})
-
+        config_args.update({"relationships_name": f"relationships_{self.context_id}"})
 
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
 
@@ -280,17 +282,45 @@ class ContextSwitcher:
             entities = read_indexer_entities(final_nodes, final_entities, community_level) # KustoDB: read Final nodes data and entities data and merge it.
             reports = read_indexer_reports(final_community_reports, final_nodes, community_level)
             text_units = read_indexer_text_units(final_text_units)
+            relationships_aggergate=read_indexer_relationships(final_relationships)
 
+
+            txt_hmap = {}
+            for unit in text_units:
+                txt_hmap[unit.id] = [unit.text_embedding,unit.text]
+
+            relationships = []
+            for r in relationships_aggergate:
+                r_per_txt = [] 
+                txt_units = r.text_unit_ids
+                for unit in txt_units:
+                    new_r= Relationship(source=r.source,
+                                        target=r.target,    
+                                        source_id=generate_entity_id(r.source),
+                                        target_id = generate_entity_id(r.target),
+                                        text_unit_embedding = txt_hmap[unit][0],
+                                        text_unit_ids=[unit],
+                                        text_unit=txt_hmap[unit][1],
+                                        id=r.id,
+                                        short_id=r.short_id)
+                    
+                    r_per_txt.append(new_r)
+
+                relationships += r_per_txt
+
+ 
             description_embedding_store.load_entities(entities)
             if self.use_kusto_community_reports:
                 raise ValueError("Community reports not supported for kusto.")
                 #description_embedding_store.load_reports(reports)
 
             description_embedding_store.load_text_units(text_units)
+            description_embedding_store.load_relationships(relationships)
 
             if config.graphdb.enabled:
                 graph_db_client.write_vertices(final_entities, added_vertices)
                 graph_db_client.write_edges(final_relationships)
+                
 
         if config.graphdb.enabled:
             graph_db_client.wait_for_jobs()
