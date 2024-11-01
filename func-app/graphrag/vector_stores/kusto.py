@@ -10,7 +10,7 @@ from azure.kusto.data.helpers import dataframe_from_result_table
 from graphrag.model.community_report import CommunityReport
 from graphrag.model.entity import Entity
 from graphrag.model.types import TextEmbedder
-from graphrag.model import TextUnit
+from graphrag.model import TextUnit,Relationship
 import logging
 import numpy as np
 import pandas as pd
@@ -440,11 +440,6 @@ class KustoVectorStore(BaseVectorStore):
     ) -> list[CommunityReport]:
 
 
-
-
-
-
-
         community_ids = ", ".join([str(id) for id in community_ids])
         query = f"""
         {self.reports_name}
@@ -477,3 +472,86 @@ class KustoVectorStore(BaseVectorStore):
         except Exception as ex:
             logging.error(ex)
             raise
+    
+    def get_matching_relationships(self, query: str, text_embedder: TextEmbedder, k: int = 10,
+                               entity_ids=[], depth=1,
+                               **kwargs: Any
+    ):
+        # Get top text units using similarity search
+        query_embedding = text_embedder(query)
+
+        if entity_ids==[]:
+            cmd = f"""
+                let query_vector = dynamic({query_embedding});
+                {self.relationships_name}
+                | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
+                | top {k} by similarity desc
+                """
+        else:
+            cmd = f"""
+                let query_vector = dynamic({query_embedding});
+                {self.relationships_name} | 
+                where id in ({entity_ids}) | 
+                | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
+                | top {k} by similarity desc
+                """
+            
+        response = self.exe( cmd)
+        df = dataframe_from_result_table(response.primary_results[0])
+
+        # Get all edges in retrieved rows    
+        rels=[]
+        for _,row in df.iterrows():
+            txt_unit_l = row['text_unit_ids']
+            if txt_unit_l == '' or txt_unit_l==None :
+                print( "Unexpected relationship: missing text unit" )
+                exit(-1)
+            txt_unit_l = ast.literal_eval(txt_unit_l)
+
+            if len(txt_unit_l) != 1:
+                print( "Unexpected relationship: Zero/Multiple text units in one row" )
+                exit(-1)
+
+            r=Relationship(
+                source=row['source'],
+                target=row['target'],
+                id=row['id'],
+                short_id="0",
+                source_id=row['source_id'],
+                target_id=row['target_id'],
+                weight=row['weight'],
+                text_unit_ids=txt_unit_l,  #must have only one ID
+                text_unit=row['text_unit']
+            )
+            rels.append(r)
+        
+        return rels
+    
+    def setup_relationships(self):
+        command = f".drop table {self.relationships_name} ifexists"
+        self.client.execute(self.database, command)
+
+        rels_schema = (f".create table {self.relationships_name} (id: string, source: string, target:string,"
+                                "weight: real ,"
+                                "text_unit_ids: dynamic,"                               
+                                "source_id:string,"
+                                "target_id:string,"
+                                "text_unit_embedding:dynamic,text_unit:string)"
+                                )
+
+        self.client.execute(self.database, rels_schema)
+
+    def load_relationships(self, rels: list[Relationship], overwrite: bool = False):
+        df = pd.DataFrame(rels)
+
+        #df.drop("source",axis=1,inplace=True)
+        #df.drop("target",axis=1,inplace=True)
+        df.drop("short_id",axis=1,inplace=True)
+        df.drop("description",axis=1,inplace=True)
+        df.drop("description_embedding",axis=1,inplace=True) #####
+        df.drop("document_ids",axis=1,inplace=True)
+        df.drop("attributes",axis=1,inplace=True)
+
+        ingestion_command = f".ingest inline into table {self.relationships_name} <| {df.to_csv(index=False, header=False)}"
+
+        self.client.execute(self.database, ingestion_command)
