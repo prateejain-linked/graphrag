@@ -94,6 +94,7 @@ class ContextSwitcher:
             description_embedding_store.setup_reports()
 
         description_embedding_store.setup_text_units()
+        description_embedding_store.setup_relationships()
 
         return description_embedding_store
 
