@@ -35,6 +35,8 @@ embeddings:
     type: kusto
     cluster: https://cstorehotindex.eastus2.kusto.windows.net
     database: enron_prototype_hot_store
+    store_in_table: 1
+    index_in_memory: 1
   llm:
     api_key: ${GRAPHRAG_API_KEY}
     type: azure_openai_embedding #openai_embedding # or azure_openai_embedding
