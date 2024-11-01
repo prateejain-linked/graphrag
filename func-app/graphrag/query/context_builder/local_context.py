@@ -42,7 +42,7 @@ def build_entity_context(
 
     # add headers
     current_context_text = f"-----{context_name}-----" + "\n"
-    header = ["short_id","id", "entity", "description", "text_unit_ids", "document_ids"]
+    header = ["id", "entity", "description"]
     if include_entity_rank:
         header.append(rank_description)
     attribute_cols = (
@@ -58,11 +58,8 @@ def build_entity_context(
     for entity in selected_entities:
         new_context = [
             entity.short_id if entity.short_id else "",
-            entity.id,
             entity.title,
             entity.description if entity.description else "",
-            entity.text_unit_ids if entity.text_unit_ids else "[]",
-            entity.document_ids if entity.document_ids else "[]"
         ]
         if include_entity_rank:
             new_context.append(str(entity.rank))
@@ -202,7 +199,7 @@ def build_relationship_context(
     all_context_records = [header]
     for rel in selected_relationships:
         new_context = [
-            rel.id, # rel.id will never be empty.
+            rel.short_id if rel.short_id else "",
             rel.source,
             rel.target,
             rel.description if rel.description else "",
@@ -219,7 +216,7 @@ def build_relationship_context(
         new_context_text = ""
         new_tokens = 0
         if not is_optimized_search:
-            new_context_text = column_delimiter.join(new_context) + "\n"
+            new_context_text = column_delimiter.join(str(new_context)) + "\n"
             new_tokens = num_tokens(new_context_text, token_encoder)
             if current_tokens + new_tokens > max_tokens:  #General: There could be side impact of generating huge number of relationships
                 break

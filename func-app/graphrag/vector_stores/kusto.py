@@ -69,7 +69,7 @@ class KustoVectorStore(BaseVectorStore):
             #kcsb = KustoConnectionStringBuilder.with_interactive_login(str(cluster))
             kcsb = KustoConnectionStringBuilder.with_az_cli_authentication(cluster)
         else:
-             kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
+            kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(
             str(cluster), str(client_id), str(client_secret), str(authority_id))
 
         self.client = KustoClient(kcsb)
@@ -197,6 +197,8 @@ class KustoVectorStore(BaseVectorStore):
                                preselected_entities=[],
                                **kwargs: Any
     ) -> list[Entity]:
+
+
         query_embedding = text_embedder(text)
 
         if preselected_entities==[]:
@@ -220,21 +222,22 @@ class KustoVectorStore(BaseVectorStore):
 
         response = self.client.execute(self.database, query)
         df = dataframe_from_result_table(response.primary_results[0])
+        pt_enabled = os.environ.get("PROTOTYPE")
 
         return [
             Entity(
                 id=row["id"],
-                title=row["title"],
-                type=row["type"],
-                description=row["description"],
-                graph_embedding=row["graph_embedding"],
+                title=row["title"] if not pt_enabled else '',
+                type=row["type"] if not pt_enabled else '',
+                description=row["description"] if not pt_enabled else '',
+                graph_embedding=row["graph_embedding"] if not pt_enabled else '',
                 text_unit_ids=row["text_unit_ids"],
                 description_embedding=row["description_embedding"],
                 short_id="",
-                community_ids=row["community_ids"],
-                document_ids=row["document_ids"],
+                community_ids=row["community_ids"] if not pt_enabled else '[]',
+                document_ids=row["document_ids"] if not pt_enabled else '[]',
                 rank=row["rank"],
-                attributes=row["attributes"],
+                attributes=row["attributes"] if not pt_enabled else '',
                 #score= 1 + float(row["similarity"]), #score not in Entity currently
             ) for _, row in df.iterrows()
         ]
@@ -245,7 +248,9 @@ class KustoVectorStore(BaseVectorStore):
         self.client.execute(self.database,f".drop table {self.reports_name} ifexists")
 
     def setup_entities(self) -> None:
-        command = f".drop table {self.collection_name} ifexists"
+        if self._check_if_table_exists(self.collection_name):
+            return
+        command = f".drop table {self.collection_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -308,6 +313,8 @@ class KustoVectorStore(BaseVectorStore):
 
 
     def setup_reports(self) -> None:
+        # if self._check_if_table_exists(self.reports_name):
+        #     return
         command = f".drop table {self.reports_name} ifexists"
         self.client.execute(self.database, command)
         command = f".create table {self.reports_name} (id: string, short_id: string, title: string, community_id: string, summary: string, full_content: string, rank: real, summary_embedding: dynamic, full_content_embedding: dynamic, attributes: dynamic)"
@@ -330,7 +337,9 @@ class KustoVectorStore(BaseVectorStore):
         self.client.execute(self.database, ingestion_command)
 
     def setup_text_units(self) -> None:
-        command = f".drop table {self.text_units_name} ifexists"
+        if self._check_if_table_exists(self.text_units_name):
+            return
+        command = f".drop table {self.text_units_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -402,19 +411,22 @@ class KustoVectorStore(BaseVectorStore):
         r=self.exe(command)
         r=dataframe_from_result_table(r.primary_results[0])
 
-        cite_index=1
-        res=[]
+        pt_enabled = os.environ.get("PROTOTYPE")
 
+
+
+        res=[]
+        cite_index=1
         for _,row in  r.iterrows():
             u=TextUnit(
                 id=row['id'],
                 short_id=str(cite_index),
-                text=row['text'],
+                text=row['text'] if not pt_enabled else '',
                 text_embedding=[],
-                entity_ids=row['entity_ids'],
-                relationship_ids=row['relationship_ids'],
+                entity_ids=row['entity_ids'] if not pt_enabled else '[]',
+                relationship_ids=row['relationship_ids']  if not pt_enabled else '[]' ,
                 covariate_ids=[],
-                n_tokens=row['n_tokens'],
+                n_tokens=row['n_tokens'] if not pt_enabled else '',
                 document_ids=row['document_ids'],
                 attributes={} #row['attributes'],
             )
@@ -426,6 +438,13 @@ class KustoVectorStore(BaseVectorStore):
     def get_extracted_reports(
         self, community_ids: list[int], **kwargs: Any
     ) -> list[CommunityReport]:
+
+
+
+
+
+
+
         community_ids = ", ".join([str(id) for id in community_ids])
         query = f"""
         {self.reports_name}
@@ -448,3 +467,13 @@ class KustoVectorStore(BaseVectorStore):
                 attributes=row["attributes"],
             ) for _, row in df.iterrows()
         ]
+
+    def _check_if_table_exists(self, table_name: str) -> bool:
+        try:
+            command = f".show tables | where TableName == '{table_name}'"
+            response = self.client.execute(self.database, command)
+            logging.info(f"The table {table_name} exists status: {str(len(response.primary_results))}")
+            return response.primary_results[0].rows_count > 0
+        except Exception as ex:
+            logging.error(ex)
+            raise

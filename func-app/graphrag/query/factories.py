@@ -3,10 +3,9 @@
 
 """Query Factory methods to support CLI."""
 
-import os
 from graphrag.config.models.graphdb_config import GraphDBConfig
 import tiktoken
-from azure.identity import ManagedIdentityCredential, get_bearer_token_provider, DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 from graphrag.config import (
     GraphRagConfig,
@@ -30,7 +29,7 @@ from graphrag.query.structured_search.global_search.search import GlobalSearch
 from graphrag.query.structured_search.local_search.mixed_context import (
     LocalSearchMixedContext,
 )
-from graphrag.query.structured_search.local_search.search import LocalSearch
+from graphrag.query.structured_search.local_search.search import LocalSearch, Summarizer
 from graphrag.vector_stores import BaseVectorStore
 
 
@@ -50,15 +49,15 @@ def get_llm(config: GraphRagConfig) -> ChatOpenAI:
     else:
         cognitive_services_endpoint = config.llm.cognitive_services_endpoint
     print(f"creating llm client with {llm_debug_info}")  # noqa T201
+    creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
+                                     exclude_interactive_browser_credential = False)
+    azure_ad_token_provider = None
+    if is_azure_client : #and not config.llm.api_key:
+        azure_ad_token_provider = get_bearer_token_provider(creds, cognitive_services_endpoint)
+
     return ChatOpenAI(
         api_key=config.llm.api_key,
-        azure_ad_token_provider=(
-            get_bearer_token_provider(
-                DefaultAzureCredential(managed_identity_client_id=os.getenv('AZURE_CLIENT_ID'), exclude_interactive_browser_credential = False), cognitive_services_endpoint
-            )
-            if is_azure_client and not config.llm.api_key
-            else None
-        ),
+        azure_ad_token_provider=azure_ad_token_provider,
         api_base=config.llm.api_base,
         organization=config.llm.organization,
         model=config.llm.model,
@@ -82,15 +81,15 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
     else:
         cognitive_services_endpoint = config.embeddings.llm.cognitive_services_endpoint
     print(f"creating embedding llm client with {llm_debug_info}")  # noqa T201
+    creds=DefaultAzureCredential(managed_identity_client_id="500051c4-c242-4018-9ae4-fb983cfebefd", 
+                                     exclude_interactive_browser_credential = False)
+    azure_ad_token_provider = None
+    if is_azure_client : #and not config.llm.api_key:
+        azure_ad_token_provider = get_bearer_token_provider(creds, cognitive_services_endpoint)
+
     return OpenAIEmbedding(
         api_key=config.embeddings.llm.api_key,
-        azure_ad_token_provider=(
-            get_bearer_token_provider(
-                DefaultAzureCredential(managed_identity_client_id=os.getenv('AZURE_CLIENT_ID'), exclude_interactive_browser_credential = False), cognitive_services_endpoint
-            )
-            if is_azure_client and not config.embeddings.llm.api_key
-            else None
-        ),
+        azure_ad_token_provider=azure_ad_token_provider,
         api_base=config.embeddings.llm.api_base,
         organization=config.llm.organization,
         api_type=OpenaiApiType.AzureOpenAI if is_azure_client else OpenaiApiType.OpenAI,
@@ -99,7 +98,6 @@ def get_text_embedder(config: GraphRagConfig) -> OpenAIEmbedding:
         api_version=config.embeddings.llm.api_version,
         max_retries=config.embeddings.llm.max_retries,
     )
-
 
 def get_local_search_engine(
     config: GraphRagConfig,
@@ -207,5 +205,54 @@ def get_global_search_engine(
             "context_name": "Reports",
         },
         concurrent_coroutines=gs_config.concurrency,
+        response_type=response_type,
+    )
+def get_summarizer(
+    config: GraphRagConfig,
+    response_type:str,
+    external_entities:list[Entity],
+    external_relationships: list[Relationship],
+    external_text_units: list[TextUnit],
+) :
+    llm = get_llm(config)
+    text_embedder = get_text_embedder(config)
+    token_encoder = tiktoken.get_encoding(config.encoding_model)
+
+    ls_config = config.local_search
+
+    return Summarizer(
+        llm=llm,
+        context_builder=LocalSearchMixedContext(
+            entities=[],
+            entity_text_embeddings=None, # no vector store here
+            embedding_vectorstore_key=EntityVectorStoreKey.ID,  # if the vectorstore uses entity title as ids, set this to EntityVectorStoreKey.TITLE
+            text_embedder=text_embedder,
+            token_encoder=token_encoder,
+            config=config,
+            ext_entities=external_entities,
+            ext_relationships=external_relationships,
+            ext_text_units=external_text_units
+        ),
+        token_encoder=token_encoder,
+        llm_params={
+            "max_tokens": ls_config.llm_max_tokens,  # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 1000=1500)
+            "temperature": ls_config.temperature,
+            "top_p": ls_config.top_p,
+            "n": ls_config.n,
+        },
+        context_builder_params={
+            "text_unit_prop": ls_config.text_unit_prop,
+            "community_prop": ls_config.community_prop,
+            "conversation_history_max_turns": ls_config.conversation_history_max_turns,
+            "conversation_history_user_turns_only": True,
+            "top_k_mapped_entities": ls_config.top_k_entities,
+            "top_k_relationships": ls_config.top_k_relationships,
+            "include_entity_rank": True,
+            "include_relationship_weight": True,
+            "include_community_rank": False,
+            "return_candidate_context": False,
+            "embedding_vectorstore_key": EntityVectorStoreKey.ID,  # set this to EntityVectorStoreKey.TITLE if the vectorstore uses entity title as ids
+            "max_tokens": ls_config.max_tokens,  # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 5000)
+        },
         response_type=response_type,
     )

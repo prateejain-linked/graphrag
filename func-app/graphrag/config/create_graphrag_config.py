@@ -567,6 +567,17 @@ def create_graphrag_config(
         encoding_model = reader.str(Fragment.encoding_model) or defs.ENCODING_MODEL
         skip_workflows = reader.list("skip_workflows") or []
 
+        with reader.envvar_prefix(Section.output_storage), reader.use(values.get("output_storage")):
+            s_type = reader.str(Fragment.type)
+            output_storage_model = StorageConfig(
+                type=StorageType(s_type) if s_type else defs.STORAGE_TYPE,
+                connection_string=reader.str(Fragment.conn_string),
+                storage_account_blob_url=reader.str(Fragment.storage_account_blob_url),
+                container_name=reader.str(Fragment.container_name),
+                base_dir=reader.str(Fragment.base_dir) or defs.STORAGE_BASE_DIR,
+                overwrite=reader.bool(Fragment.overwrite) or False
+            )
+
     return GraphRagConfig(
         root_dir=root_dir,
         llm=llm_model,
@@ -592,6 +603,7 @@ def create_graphrag_config(
         global_search=global_search_model,
         query_context=query_context_model,
         graphdb=graphdb_model,
+        output_storage=output_storage_model
     )
 
 
@@ -661,6 +673,7 @@ class Section(str, Enum):
     global_search = "GLOBAL_SEARCH"
     query_context = "QUERY_CONTEXT"
     graphdb = "GRAPHDB"
+    output_storage = "OUTPUT_STORAGE"
 
 
 def _is_azure(llm_type: LLMType | None) -> bool:
