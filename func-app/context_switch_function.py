@@ -173,7 +173,7 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
 
     req_type: str = req.params['req_type']
     req_type = req_type.lower()
-    context_name = req.params['context_name']
+    context_name = req.params.get('context_name',None)
     if context_name is None or len(context_name) <= 0:
         return func.HttpResponse(
                 f"The {req_type} request must be passed with context name",
