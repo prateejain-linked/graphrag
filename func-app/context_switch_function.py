@@ -20,7 +20,7 @@ logging.getLogger().addHandler(handler)
 def initialize_incoming_msg_queue() -> QueueStorageClient:
     max_messages = int(os.environ.get("MAX_QUEUE_MESSAGE_COUNT", default="1"))
     queue_url = os.environ.get("AZURE_QUEUE_URL")
-    queue_name = os.environ.get("AZURE_QUEUE_NAME")
+    queue_name = os.environ.get("AZURE_CTX_QUEUE_NAME")
     client_id = os.environ.get("AZURE_CLIENT_ID")
 
     queue_storage_client = QueueStorageClient(account_url=queue_url, queue_name=queue_name, client_id=client_id, max_message=max_messages)
@@ -184,9 +184,9 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         if req_type == 'create' or req_type == 'update':
-            content_ids = req.params['content_ids']
+            content_ids = req.params.get('content_ids',None)
 
-            if content_ids is None is len(content_ids) <= 0:
+            if content_ids is None or len(content_ids) <= 0:
                 return func.HttpResponse(
                     f"The {req_type} request must be passed with context name and content ids to initialize.",
                     status_code=400
