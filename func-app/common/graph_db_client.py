@@ -269,3 +269,29 @@ class GraphDBClient:
         except Exception as e:
             print(f"Error writing to graph: {e}")
             raise e
+    
+    def get_all_edges_within_depth(self,node,depth):
+        if depth==1:
+            graph_query=(
+                f"""
+                    g.V('{node}').outE()
+                """
+            )
+        else:
+            graph_query=(
+                f"""
+                    g.V('{node}')
+                    .repeat(__.outE().otherV()).times({depth-1}).outE().dedup().toList()
+                """
+            )
+        result = self._client.submit(
+            message=graph_query,
+        )
+        json_data = []
+        for rows in result:
+            for row in rows:
+                id=row['id']
+                source_id = row['inV']
+                target_id = row['outV']
+                json_data.append({'id':id, 'source_id':source_id, 'target_id':target_id})
+        return json_data

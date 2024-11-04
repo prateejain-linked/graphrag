@@ -7,7 +7,7 @@ import codecs
 from graphrag.index.cli import index_cli
 import os 
 
-from graphrag.query.cli import run_local_search, summarize,rrf_scoring
+from graphrag.query.cli import run_local_search, summarize,rrf_scoring,expand_node_graph
 from time import sleep
 
 query_functions = func.Blueprint()
@@ -103,5 +103,20 @@ def rrf(req: func.HttpRequest) -> func.HttpResponse:
     json_res={'query_id':output}
     return func.HttpResponse(
         json.dumps(json_res),
+        status_code=200
+    )
+
+
+@query_functions.function_name('query_expansion')
+@query_functions.route(route="query_expansion", auth_level=func.AuthLevel.FUNCTION)
+def query_expansion(req: func.HttpRequest) -> func.HttpResponse:
+
+    node = req.params['node']
+    context_id = req.params['context_id']
+    query = req.params['query']
+    depth = int(req.params['depth'])
+    output = expand_node_graph(node,context_id,query,depth)
+    return func.HttpResponse(
+        str(output),
         status_code=200
     )
