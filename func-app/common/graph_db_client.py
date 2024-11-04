@@ -13,11 +13,8 @@ import time
 import os
 import json
 
-<<<<<<< HEAD
 from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
 
-=======
->>>>>>> Changes
 # Azure Cosmos DB Gremlin Endpoint and other constants
 COSMOS_DB_SCOPE = "https://cosmos.azure.com/.default"  # The scope for Cosmos DB
 class GraphDBClient:
@@ -236,7 +233,6 @@ class GraphDBClient:
                   .dedup('source_id','target_id')
                   .limit({top})
                 """
-            ),
         )
 
         json_data = []
