@@ -32,7 +32,7 @@ def initialize_watermark_client() -> BlobPipelineStorage:
     # watermark_container_name='watermark'
 
     blob_account_url = os.environ.get("AZURE_WATERMARK_ACCOUNT_URL")
-    watermark_container_name = os.environ.get("WATERMARK_CONTAINER_NAME")
+    watermark_container_name = os.environ.get("WATERMARK_CTX_CONTAINER_NAME")
     client_id = os.environ.get("AZURE_CLIENT_ID")
 
     watermark_storage_account = BlobPipelineStorage(connection_string=None, container_name=watermark_container_name, storage_account_blob_url=blob_account_url)
