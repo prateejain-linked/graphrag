@@ -28,6 +28,7 @@ from graphrag.common.progress import PrintProgressReporter
 from graphrag.index.verbs.entities.extraction.strategies.graph_intelligence.run_graph_intelligence import run_gi
 from graphrag.index.verbs.entities.extraction.strategies.typing import Document
 from graphrag.model.entity import Entity
+from graphrag.query.graph_visualization.graph_expansion.graphExpanderMaximumSimilarityEdge import GraphExpanderMaximumSimilarityEdge
 from graphrag.query.input.loaders.dfs import (
     store_entity_semantic_embeddings,
 )
@@ -35,7 +36,7 @@ from graphrag.vector_stores import VectorStoreFactory, VectorStoreType
 from graphrag.vector_stores.base import BaseVectorStore
 from graphrag.vector_stores.lancedb import LanceDBVectorStore
 from graphrag.vector_stores.kusto import KustoVectorStore
-from .factories import get_global_search_engine, get_local_search_engine,get_summarizer
+from .factories import get_global_search_engine, get_local_search_engine,get_summarizer,get_text_embedder
 from .indexer_adapters import (
     read_indexer_covariates,
     read_indexer_entities,
@@ -631,3 +632,31 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
     ) 
 
     return str(new_query_id)
+
+
+def expand_node_graph(node,context_id,query,depth,root_dir='settings'):
+    data_dir, root_dir, config = _configure_paths_and_settings(
+        '', root_dir, None
+    )
+    text_embedder=get_text_embedder(config)
+    vector_store_args = (
+        config.embeddings.vector_store if config.embeddings.vector_store else {}
+    )
+    collection_name = vector_store_args.get(
+        "query_collection_name", "relationships"
+    )
+    vector_store_args.update({"collection_name": f"{collection_name}_{context_id}" if context_id else collection_name})
+    vector_name = vector_store_args.get(
+        "vector_search_column", "text_unit_embedding"
+    )
+    vector_store_args.update({"vector_name": vector_name})
+    vector_store_args.update({"reports_name": f"reports_{context_id}" if context_id else "reports"})
+    vector_store_args.update({"text_units_name": f"text_units_{context_id}"})
+    vector_store_args.update({"docs_tbl_name": f"docs_{context_id}"})
+    kusto_client = VectorStoreFactory.get_vector_store(
+        vector_store_type="kusto", kwargs=vector_store_args,
+    )
+    kusto_client.connect(**vector_store_args)
+    graphdb_client = GraphDBClient(config.graphdb,context_id=context_id)
+    graph_expander = GraphExpanderMaximumSimilarityEdge(kusto_client,graphdb_client,text_embedder)
+    return graph_expander.expand_node(node=node,depth=depth,top_k=2,query=query,excluding_edges_ids=[],use_kusto=True)

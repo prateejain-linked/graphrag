@@ -13,12 +13,7 @@ import time
 import os
 import json
 
-<<<<<<< HEAD
-
-
-=======
 from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
->>>>>>> Updates to sanitize the graph
 
 # Azure Cosmos DB Gremlin Endpoint and other constants
 COSMOS_DB_SCOPE = "https://cosmos.azure.com/.default"  # The scope for Cosmos DB
@@ -263,4 +258,40 @@ class GraphDBClient:
 
         #####################################################################
 
+        return json_data
+
+    def wait_for_jobs(self):
+        """Wait for all running jobs to complete."""
+        try:
+            for job in self.running_jobs:
+                job.all().result()
+            self.running_jobs.clear()
+        except Exception as e:
+            print(f"Error writing to graph: {e}")
+            raise e
+    
+    def get_all_edges_within_depth(self,node,depth):
+        if depth==1:
+            graph_query=(
+                f"""
+                    g.V('{node}').outE()
+                """
+            )
+        else:
+            graph_query=(
+                f"""
+                    g.V('{node}')
+                    .repeat(__.outE().otherV()).times({depth-1}).outE().dedup().toList()
+                """
+            )
+        result = self._client.submit(
+            message=graph_query,
+        )
+        json_data = []
+        for rows in result:
+            for row in rows:
+                id=row['id']
+                source_id = row['inV']
+                target_id = row['outV']
+                json_data.append({'id':id, 'source_id':source_id, 'target_id':target_id})
         return json_data

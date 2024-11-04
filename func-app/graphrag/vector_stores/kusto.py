@@ -554,3 +554,95 @@ class KustoVectorStore(BaseVectorStore):
         ingestion_command = f".ingest inline into table {self.relationships_name} <| {df.to_csv(index=False, header=False)}"
 
         self.client.execute(self.database, ingestion_command)
+    def get_expanding_edges_excluding_vertices(self,current_vertices,query,excluding_vertices,excluding_edges_ids,text_embedder):
+        current_vertices_str =", ".join(f"'{id}'" for id in current_vertices )
+        excluding_vertices_str =", ".join(f"'{id}'" for id in excluding_vertices )
+        excluding_edges_str = ", ".join(f"'{id}'" for id in excluding_edges_ids )
+        if len(excluding_edges_ids)==0:
+            exclude_edge_id_filter = True
+        else:
+            exclude_edge_id_filter = f"id !in ({excluding_edges_str})"
+        query_embedding = text_embedder.embed(query)
+        kusto_query = f"""
+        let query_vector = dynamic({query_embedding});
+        {self.collection_name}
+        | where source_id in ({current_vertices_str})
+        | where target_id !in ({excluding_vertices_str})
+        | where ({exclude_edge_id_filter})
+        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | sort by similarity desc
+        """
+        response = self.client.execute(self.database, kusto_query)
+        df = dataframe_from_result_table(response.primary_results[0])
+        return [
+            Relationship(
+                id=row['id'],
+                source=row['source'],
+                target=row['target'],
+                short_id=row_index,
+                source_id=row['source_id'],
+                target_id=row['target_id'],
+                text_unit_ids=row['text_unit_ids'],
+                attributes={'similarity':row['similarity']}
+            )
+            for row_index, row in df.iterrows()
+        ]
+    
+    def get_expanding_edges_including_vertices(self,current_vertices,query,including_vertices,excluding_edges_ids,text_embedder):
+        current_vertices_str =", ".join(f"'{id}'" for id in current_vertices )
+        including_vertices_str =", ".join(f"'{id}'" for id in including_vertices )
+        excluding_edges_str = ", ".join(f"'{id}'" for id in excluding_edges_ids )
+        if len(excluding_edges_ids)==0:
+            exclude_edge_id_filter = True
+        else:
+            exclude_edge_id_filter = f"id !in ({excluding_edges_str})"
+        query_embedding = text_embedder.embed(query)
+        kusto_query = f"""
+        let query_vector = dynamic({query_embedding});
+        {self.collection_name}
+        | where source_id in ({current_vertices_str})
+        | where target_id in ({including_vertices_str})
+        | where ({exclude_edge_id_filter})
+        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | sort by similarity desc
+        """
+        response = self.client.execute(self.database, kusto_query)
+        df = dataframe_from_result_table(response.primary_results[0])
+        return [
+            Relationship(
+                id=row['id'],
+                source=row['source'],
+                target=row['target'],
+                short_id=row_index,
+                source_id=row['source_id'],
+                target_id=row['target_id'],
+                text_unit_ids=row['text_unit_ids'],
+                attributes={'similarity':row['similarity']}
+            )
+            for row_index, row in df.iterrows()
+        ]
+    
+    def get_top_k_relationships_by_text_unit_similarity(self,all_edges_ids,top_k,query,text_embedder):
+        query_embedding = text_embedder.embed(query)
+        edges_ids_str=", ".join(f"'{id}'" for id in all_edges_ids )
+        kusto_query = f"""
+        let query_vector = dynamic({query_embedding});
+        {self.collection_name}
+        | where id in ({edges_ids_str})
+        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | top {top_k} by similarity desc
+        """
+        response = self.client.execute(self.database, kusto_query)
+        df = dataframe_from_result_table(response.primary_results[0])
+        return [
+            Relationship(
+                id=row['id'],
+                source=row['source'],
+                target=row['target'],
+                short_id=row_index,
+                source_id=row['source_id'],
+                target_id=row['target_id'],
+                text_unit_ids=row['text_unit_ids'],
+            )
+            for row_index, row in df.iterrows()
+        ]
