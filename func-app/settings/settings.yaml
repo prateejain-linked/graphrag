@@ -70,7 +70,7 @@ chunks:
 input:
   type: blob
   file_type: text # or csv
-  container_name: "emailset"
+  container_name: "emailset2"
   storage_account_blob_url: "https://inputdatasetsa.blob.core.windows.net"
   base_dir: ""
   file_encoding: utf-8
@@ -87,7 +87,7 @@ storage:
   base_dir: "artifacts"
   storage_account_blob_url: "https://indexedoutputartifacts.blob.core.windows.net"
   # connection_string: <azure_blob_storage_connection_string>
-  container_name: indexing
+  container_name: indexing2
 
 reporting:
   type: console # or console, blob
@@ -172,4 +172,4 @@ output_storage:
   base_dir: "artifacts"
   storage_account_blob_url: "https://indexedoutputartifacts.blob.core.windows.net"
   # connection_string: <azure_blob_storage_connection_string>
-  container_name: queryresult
+  container_name: queryresult2
