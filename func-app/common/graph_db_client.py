@@ -180,7 +180,7 @@ class GraphDBClient:
                     ".property('rank',prop_rank)"
                     ".property('source',prop_source)"
                     ".property('target',prop_target)"
-                ),
+                )
                 bindings={
                     "prop_partition_key": "entities",
                     "prop_source_id": row.source,
@@ -217,22 +217,26 @@ class GraphDBClient:
         #Load relationships
         m=(
                 f"""g.V().has('id', '{entity_id}')
-                  .bothE('connects')
-                  .project('source_id', 'target_id', 'rank','text_unit_ids')
+                .bothE('connects')
+                    .project('id','source_id', 'target_id', 'weight','text_unit_ids','description','source','target','rank')
+                    .by('id')
                     .by(outV().values('id'))
                     .by(inV().values('id'))
-                    .by('rank')
+                    .by('weight')
                     .by('text_unit_ids')
                   .group()
                     .by(select('source_id', 'target_id'))
                     .by(fold())
-                  .unfold()
-                  .select(values)
-                  .unfold()
-                  .order().by(select('rank'), decr)
-                  .dedup('source_id','target_id')
-                  .limit({top})
+                .unfold()
+                .select(values)
+                .unfold()
+                .order().by(select('weight'), decr)
+                .dedup('source_id','target_id')
+                .limit({top})
                 """
+        )
+        result = self._client.submit(
+            message=m,
         )
 
         json_data = []
@@ -240,11 +244,17 @@ class GraphDBClient:
             for row in rows:
                 source_id = row['source_id']
                 target_id = row['target_id']
-                rank = row['rank']
+                weight = row['weight']
                 text_unit_ids = row['text_unit_ids']
+                rank=row['rank']
                 related_entity_id = source_id if source_id != entity_id else target_id
-                json_data.append({'entity_id': related_entity_id, 'rank': rank, 'text_unit_ids': text_unit_ids})
+                json_data.append({'id':id,'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,
+                                    'rank':rank,
+                                    'source_id':source_id, 'target_id':target_id})
 
+
+
+        #####################################################################
         return json_data
 
     def wait_for_jobs(self):
