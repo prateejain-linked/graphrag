@@ -224,7 +224,8 @@ class GraphDBClient:
                     .by(inV().values('id'))
                     .by('weight')
                     .by('text_unit_ids')
-                  .group()
+                    .by(coalesce(values('rank'), constant (0)))
+                .group()
                     .by(select('source_id', 'target_id'))
                     .by(fold())
                 .unfold()
@@ -234,7 +235,7 @@ class GraphDBClient:
                 .dedup('source_id','target_id')
                 .limit({top})
                 """
-        )
+            )
         result = self._client.submit(
             message=m,
         )
@@ -255,6 +256,7 @@ class GraphDBClient:
 
 
         #####################################################################
+        
         return json_data
 
     def wait_for_jobs(self):
