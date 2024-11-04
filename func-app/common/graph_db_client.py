@@ -5,7 +5,7 @@ from graphrag.config.models.graphdb_config import GraphDBConfig
 import numpy as np
 
 import ast
-import logging
+
 from gremlin_python.driver import client, serializer
 from azure.identity import ManagedIdentityCredential
 
@@ -13,8 +13,11 @@ import time
 import os
 import json
 
+<<<<<<< HEAD
 from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
 
+=======
+>>>>>>> Changes
 # Azure Cosmos DB Gremlin Endpoint and other constants
 COSMOS_DB_SCOPE = "https://cosmos.azure.com/.default"  # The scope for Cosmos DB
 class GraphDBClient:
@@ -180,7 +183,7 @@ class GraphDBClient:
                     ".property('rank',prop_rank)"
                     ".property('source',prop_source)"
                     ".property('target',prop_target)"
-                )
+                ),
                 bindings={
                     "prop_partition_key": "entities",
                     "prop_source_id": row.source,
@@ -217,46 +220,34 @@ class GraphDBClient:
         #Load relationships
         m=(
                 f"""g.V().has('id', '{entity_id}')
-                .bothE('connects')
-                    .project('id','source_id', 'target_id', 'weight','text_unit_ids','description','source','target','rank')
-                    .by('id')
+                  .bothE('connects')
+                  .project('source_id', 'target_id', 'rank','text_unit_ids')
                     .by(outV().values('id'))
                     .by(inV().values('id'))
-                    .by('weight')
+                    .by('rank')
                     .by('text_unit_ids')
-                    .by(coalesce(values('rank'), constant (0)))
-                .group()
+                  .group()
                     .by(select('source_id', 'target_id'))
                     .by(fold())
-                .unfold()
-                .select(values)
-                .unfold()
-                .order().by(select('weight'), decr)
-                .dedup('source_id','target_id')
-                .limit({top})
+                  .unfold()
+                  .select(values)
+                  .unfold()
+                  .order().by(select('rank'), decr)
+                  .dedup('source_id','target_id')
+                  .limit({top})
                 """
-            )
-        result = self._client.submit(
-            message=m,
+            ),
         )
 
         json_data = []
         for rows in result:
             for row in rows:
-                id=row['id']
                 source_id = row['source_id']
                 target_id = row['target_id']
-                weight = row['weight']
+                rank = row['rank']
                 text_unit_ids = row['text_unit_ids']
-                rank=row['rank']
                 related_entity_id = source_id if source_id != entity_id else target_id
-                json_data.append({'id':id,'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,
-                                    'rank':rank,
-                                    'source_id':source_id, 'target_id':target_id})
-
-
-
-        #####################################################################
+                json_data.append({'entity_id': related_entity_id, 'rank': rank, 'text_unit_ids': text_unit_ids})
 
         return json_data
 
