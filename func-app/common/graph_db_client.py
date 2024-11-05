@@ -243,6 +243,7 @@ class GraphDBClient:
         json_data = []
         for rows in result:
             for row in rows:
+                id = row['id']
                 source_id = row['source_id']
                 target_id = row['target_id']
                 weight = row['weight']
