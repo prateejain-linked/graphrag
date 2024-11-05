@@ -76,6 +76,7 @@ def __get_embedding_description_store(
     config_args.update({"reports_name": f"reports_{context_id}" if context_id else "reports"})
     config_args.update({"text_units_name": f"text_units_{context_id}"})
     config_args.update({"docs_tbl_name": f"docs_{context_id}"})
+    config_args.update({"relationships_name": f"relationships_{context_id}"})
 
     description_embedding_store = VectorStoreFactory.get_vector_store(
         vector_store_type=vector_store_type, kwargs=config_args
