@@ -280,7 +280,7 @@ def cs_search(
         use_kusto_community_reports=use_kusto_community_reports,
     )
 
-    
+
     if optimized_search:
         result = search_engine.optimized_search(query=query)
     else:
@@ -288,7 +288,7 @@ def cs_search(
 
 
     raw_result=query + "\n__RAW_RESULT__:\n"+ json.dumps(result.context_data['raw_result'])
-    
+
     if save_result:
         query_id= uuid.uuid4()
         blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
@@ -296,10 +296,10 @@ def cs_search(
                                                                 storage_account_blob_url=config.output_storage.storage_account_blob_url)
         asyncio.run(blob_storage_client.set(
                             f"query/{query_id}/output.json",raw_result
-                        ) 
-                    ) 
+                        )
+                    )
         return str(query_id)
-    
+
     return raw_result
 
 
@@ -338,7 +338,7 @@ def path2(
         data_dir, root_dir, config_dir
     )
 
-    
+
     exit(0)
 
 def path3(
@@ -368,8 +368,8 @@ def run_local_search(
     path = 0,
     save_result=False):
     """Run a local search with the given query."""
-    
-    return cs_search(config_dir, data_dir, root_dir, community_level, response_type, context_id, 
+
+    return cs_search(config_dir, data_dir, root_dir, community_level, response_type, context_id,
                      query, optimized_search, use_kusto_community_reports, path=path,save_result=save_result)
 
 def blob_exists(container_client, blob_name):
@@ -471,7 +471,7 @@ def summarize(query_id:str,
     blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.output_storage.container_name,
                                                                 storage_account_blob_url=config.output_storage.storage_account_blob_url)
-    
+
     index_storage_client = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.storage.container_name,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
@@ -481,17 +481,17 @@ def summarize(query_id:str,
 
     if type(blob_data)!= str:
         return "Invalid query result"
-    
+
     query,raw_json = split_raw_response(blob_data)
 
     list_json=json.loads(raw_json)
-    
+
     blob_history={
         'loaded_entities':set(),
         'loaded_relationships':set(),
         'loaded_text_units':set()
     }
-    
+
     entities=[]
     relationships=[]
     text_units=[]
@@ -502,10 +502,10 @@ def summarize(query_id:str,
         # Entity -> text unit list, relationship list , document list [one entry]
 
         entity_id = dict_json['entity_id']
-        
+
 
         doc = dict_json["document_ids"] # Exactly ONE doc for each list of text units
-        if len(doc) != 1: 
+        if len(doc) != 1:
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
 
@@ -517,12 +517,12 @@ def summarize(query_id:str,
 
         if entity_id not in blob_history['loaded_entities']:
             blob_history['loaded_entities'].add(entity_id)
-            
+
             _nodes = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_nodes.parquet")
             _entities_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_entities.parquet")
             _entities= _entities_df[_entities_df['id'].isin([entity_id])] #isolate the target
             entities += read_indexer_entities(_nodes, _entities, community_level) #append
-        
+
         #########################################################
 
         # We do not have relationship text units
@@ -547,14 +547,14 @@ def summarize(query_id:str,
             if u not in blob_history["loaded_text_units"]:
                 blob_history["loaded_text_units"].add(u)
                 units_to_load.append(u)
-        
+
         if units_to_load != []:
             _text_units_df = read_paraquet_file(index_storage_client, f"{artifacts_path}/create_final_text_units.parquet")
             _text_units = _text_units_df[_text_units_df['id'].isin(units_to_load)]
             if len(_text_units)!=len(units_to_load):
                 return "Invlaid parquet file"
             text_units += read_indexer_text_units(_text_units)
-    
+
     summarizer = get_summarizer(
         config=config,
         response_type=response_type,
@@ -593,7 +593,7 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
     blob_storage_client = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.output_storage.container_name,
                                                                 storage_account_blob_url=config.output_storage.storage_account_blob_url)
-    
+
     query_ids=query_ids.split(',')
     print('RRF over',query_ids)
 
@@ -622,7 +622,7 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
                        'rank':rrf_scores[couple],
                        'document_ids': docs[couple] }
                       )
-        
+
 
 
     result.sort(key=lambda x : x['rank'],reverse=True)
@@ -631,11 +631,11 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
     result= query + "\n__RAW_RESULT__:\n"+ json.dumps(result)
 
     new_query_id= uuid.uuid4()
-    
+
     asyncio.run(blob_storage_client.set(
                             f"query/{new_query_id}/output.json",result
-                        ) 
-    ) 
+                        )
+    )
 
     return str(new_query_id)
 
