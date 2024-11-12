@@ -13,8 +13,6 @@ import time
 import os
 import json
 
-from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
-
 # Azure Cosmos DB Gremlin Endpoint and other constants
 COSMOS_DB_SCOPE = "https://cosmos.azure.com/.default"  # The scope for Cosmos DB
 class GraphDBClient:
@@ -31,7 +29,6 @@ class GraphDBClient:
             password=token,
             message_serializer=serializer.GraphSONSerializersV2d0(),
         )
-        self.running_jobs = set()
 
     def result_to_df(self,result) -> pd.DataFrame:
         json_data = []
@@ -90,28 +87,11 @@ class GraphDBClient:
         return element_count>0
 
     def write_vertices(self,data: pd.DataFrame, added_vertices: set)->None:
-        pt_enabled = os.environ.get("PROTOTYPE")
         for row in data.itertuples():
             if row.id not in added_vertices:
                 added_vertices.add(row.id)
-                if pt_enabled:
+                self._client.submit(
                     message=(
-                        "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
-                        "g.addV('entity')"
-                        ".property('id', prop_id)"
-                        ".property('human_readable_id', prop_human_readable_id)"
-                        ".property('category', prop_partition_key)"
-                        ".property(list,'text_unit_ids',prop_text_unit_ids))"
-                    )
-                    bindings={
-                        "prop_id": row.id,
-                        "prop_human_readable_id": row.human_readable_id,
-                        "prop_partition_key": "entities",
-                        "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
-                    }
-                else:
-                    message=(
-                        "g.V().has('entity', 'id', prop_id).fold().coalesce(unfold(), "
                         "g.addV('entity')"
                         ".property('id', prop_id)"
                         ".property('name', prop_name)"
@@ -121,8 +101,8 @@ class GraphDBClient:
                         ".property('category', prop_partition_key)"
                         ".property(list,'description_embedding',prop_description_embedding)"
                         ".property(list,'graph_embedding',prop_graph_embedding)"
-                        ".property(list,'text_unit_ids',prop_text_unit_ids))"
-                    )
+                        ".property(list,'text_unit_ids',prop_text_unit_ids)"
+                    ),
                     bindings={
                         "prop_id": row.id,
                         "prop_name": row.name,
@@ -133,39 +113,13 @@ class GraphDBClient:
                         "prop_description_embedding":json.dumps(row.description_embedding.tolist() if row.description_embedding is not None else []),
                         "prop_graph_embedding":json.dumps(row.graph_embedding.tolist() if row.graph_embedding is not None else []),
                         "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
-                    }
-                rs = self._client.submit(message=message, bindings=bindings)
-                self.running_jobs.add(rs)
+                    },
+                )
+
 
     def write_edges(self,data: pd.DataFrame)->None:
-        pt_enabled = os.environ.get("PROTOTYPE")
         for row in data.itertuples():
-            if pt_enabled:
-                message=(
-                    "g.V().has('id',prop_source_id)"
-                    ".addE('connects')"
-                    ".to(g.V().has('id',prop_target_id))"
-                    ".property('weight',prop_weight)"
-                    ".property(list,'text_unit_ids',prop_text_unit_ids)"
-                    ".property('id',prop_id)"
-                    ".property('human_readable_id',prop_human_readable_id)"
-                    ".property('source_degree',prop_source_degree)"
-                    ".property('target_degree',prop_target_degree)"
-                    ".property('rank',prop_rank)"
-                )
-                bindings={
-                    "prop_partition_key": "entities",
-                    "prop_source_id": generate_entity_id(row.source),
-                    "prop_target_id": generate_entity_id(row.target),
-                    "prop_weight": row.weight,
-                    "prop_text_unit_ids":json.dumps(row.text_unit_ids.tolist() if row.text_unit_ids is not None else []),
-                    "prop_id": row.id,
-                    "prop_human_readable_id": row.human_readable_id,
-                    "prop_source_degree": row.source_degree,
-                    "prop_target_degree": row.target_degree,
-                    "prop_rank": row.rank,
-                }
-            else:
+            self._client.submit(
                 message=(
                     "g.V().has('name',prop_source_id)"
                     ".addE('connects')"
@@ -180,7 +134,7 @@ class GraphDBClient:
                     ".property('rank',prop_rank)"
                     ".property('source',prop_source)"
                     ".property('target',prop_target)"
-                )
+                ),
                 bindings={
                     "prop_partition_key": "entities",
                     "prop_source_id": row.source,
@@ -195,10 +149,8 @@ class GraphDBClient:
                     "prop_rank": row.rank,
                     "prop_source": row.source,
                     "prop_target": row.target,
-                }
-
-            rs = self._client.submit(message=message, bindings=bindings)
-            self.running_jobs.add(rs)
+                },
+            )
 
     def get_top_related_unique_edges(self, entity_id: str, top: int) -> [dict[str, str]]:
         """Retrieve the top related unique edges for a given entity.
@@ -213,85 +165,36 @@ class GraphDBClient:
         -------
             A list of dictionaries containing the related entity IDs, weights, and text unit IDs.
         """
- 
-        #Load relationships
-        m=(
+        result = self._client.submit(
+            message=(
                 f"""g.V().has('id', '{entity_id}')
-                .bothE('connects')
-                    .project('id','source_id', 'target_id', 'weight','text_unit_ids','description','source','target','rank')
-                    .by('id')
+                  .bothE('connects')
+                  .project('source_id', 'target_id', 'rank','text_unit_ids')
                     .by(outV().values('id'))
                     .by(inV().values('id'))
-                    .by('weight')
+                    .by('rank')
                     .by('text_unit_ids')
-                    .by(coalesce(values('rank'), constant (0)))
-                .group()
+                  .group()
                     .by(select('source_id', 'target_id'))
                     .by(fold())
-                .unfold()
-                .select(values)
-                .unfold()
-                .order().by(select('weight'), decr)
-                .dedup('source_id','target_id')
-                .limit({top})
+                  .unfold()
+                  .select(values)
+                  .unfold()
+                  .order().by(select('rank'), decr)
+                  .dedup('source_id','target_id')
+                  .limit({top})
                 """
-            )
-        result = self._client.submit(
-            message=m,
+            ),
         )
 
         json_data = []
         for rows in result:
             for row in rows:
-                id = row['id']
                 source_id = row['source_id']
                 target_id = row['target_id']
-                weight = row['weight']
+                rank = row['rank']
                 text_unit_ids = row['text_unit_ids']
-                rank=row['rank']
                 related_entity_id = source_id if source_id != entity_id else target_id
-                json_data.append({'id':id,'entity_id': related_entity_id, 'weight': weight, 'text_unit_ids': text_unit_ids,
-                                    'rank':rank,
-                                    'source_id':source_id, 'target_id':target_id})
+                json_data.append({'entity_id': related_entity_id, 'rank': rank, 'text_unit_ids': text_unit_ids})
 
-
-
-        #####################################################################
-        
-        return json_data
-
-    def wait_for_jobs(self):
-        """Wait for all running jobs to complete."""
-        try:
-            for job in self.running_jobs:
-                job.all().result()
-            self.running_jobs.clear()
-        except Exception as e:
-            print(f"Error writing to graph: {e}")
-            raise e
-    
-    def get_all_edges_within_depth(self,node,depth):
-        if depth==1:
-            graph_query=(
-                f"""
-                    g.V('{node}').outE()
-                """
-            )
-        else:
-            graph_query=(
-                f"""
-                    g.V('{node}')
-                    .repeat(__.outE().otherV()).times({depth-1}).outE().dedup().toList()
-                """
-            )
-        result = self._client.submit(
-            message=graph_query,
-        )
-        json_data = []
-        for rows in result:
-            for row in rows:
-                id=row['id']
-                source_id = row['inV']
-                target_id = row['outV']
-                json_data.append({'id':id, 'source_id':source_id, 'target_id':target_id})
         return json_data
