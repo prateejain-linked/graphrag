@@ -563,7 +563,12 @@ def summarize(query_id:str,
         external_text_units=text_units
     )
     result = summarizer.summarize(query)
-    return result.response
+    return {
+        "response":result.response,
+        "relationships":result.context_data['relationships'].to_dict(orient='records'),
+        "entities":result.context_data['entities'].to_dict(orient='records'),
+        "sources":result.context_data['sources'].to_dict(orient='records'),
+    }
 
 def split_raw_response(data):
     delimiter="\n__RAW_RESULT__:\n"
