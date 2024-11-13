@@ -239,7 +239,7 @@ class ContextSwitcher:
             )
             graph_db_client = GraphDBClient(config.graphdb,context_id)
 
-        db_enabled=False #used to isolate cosmos db tests
+        db_enabled=True #used to isolate cosmos db tests
         if db_enabled:
             description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
 
