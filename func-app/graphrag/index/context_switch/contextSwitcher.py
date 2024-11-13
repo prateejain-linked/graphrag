@@ -76,6 +76,7 @@ class ContextSwitcher:
 
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
         config_args.update({"relationships_name": f"relationships_{self.context_id}"})
+        config_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{self.context_id}"})
         config_args.update({"docs_tbl_name": ''})
 
         return VectorStoreFactory.get_vector_store(
@@ -96,6 +97,7 @@ class ContextSwitcher:
 
         description_embedding_store.setup_text_units()
         description_embedding_store.setup_relationships()
+        description_embedding_store.setup_relationships_AUDIT()
 
         return description_embedding_store
 
@@ -237,11 +239,11 @@ class ContextSwitcher:
             )
             graph_db_client = GraphDBClient(config.graphdb,context_id)
 
-        db_enabled=True #used to isolate cosmos db tests
+        db_enabled=False #used to isolate cosmos db tests
         if db_enabled:
             description_embedding_store = self.setup_vector_store(config_args=config.embeddings.vector_store)
 
-        dirs=os.listdir(data_paths[0])
+        dirs=os.listdir(data_paths[0]) # data_paths should have only one element: data_paths[0]
         i_count=len(dirs)
         vector_store_args = (
                 config.embeddings.vector_store if config.embeddings.vector_store else {}
@@ -283,26 +285,30 @@ class ContextSwitcher:
                 continue
 
             entities = read_indexer_entities(final_nodes, final_entities, community_level) # KustoDB: read Final nodes data and entities data and merge it.
-            reports = read_indexer_reports(final_community_reports, final_nodes, community_level)
+            #reports = read_indexer_reports(final_community_reports, final_nodes, community_level)
             text_units = read_indexer_text_units(final_text_units)
+
             relationships_aggergate=read_indexer_relationships(final_relationships)
 
 
             txt_hmap = {}
             for unit in text_units:
-                txt_hmap[unit.id] = unit.text_embedding
+                txt_hmap[unit.id] = [unit.text_embedding,unit.text]
 
             relationships = []
             for r in relationships_aggergate:
                 r_per_txt = [] 
                 txt_units = r.text_unit_ids
+                r.source_id=generate_entity_id(r.source)
+                r.target_id=generate_entity_id(r.target)
                 for unit in txt_units:
-                    new_r= Relationship(source='',
-                                        target='',    
-                                        source_id=generate_entity_id(r.source),
-                                        target_id = generate_entity_id(r.target),
-                                        text_unit_embedding = txt_hmap[unit],
+                    new_r= Relationship(source=r.source,
+                                        target=r.target,    
+                                        source_id=r.source_id,
+                                        target_id = r.target_id,
+                                        text_unit_embedding = txt_hmap[unit][0],
                                         text_unit_ids=[unit],
+                                        text_unit=txt_hmap[unit][1],
                                         id=r.id,
                                         short_id=r.short_id)
                     
@@ -329,6 +335,7 @@ class ContextSwitcher:
 
                 description_embedding_store.load_text_units(text_units)
                 description_embedding_store.load_relationships(relationships)
+                description_embedding_store.load_relationships_AUDIT(relationships_aggergate)
 
             if config.graphdb.enabled:
                 graph_db_client.write_vertices(final_entities,vmap)

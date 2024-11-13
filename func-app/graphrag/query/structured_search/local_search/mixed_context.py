@@ -55,6 +55,9 @@ from graphrag.index.verbs.entities.extraction.strategies.graph_intelligence.run_
 from graphrag.index.verbs.graph.clustering.cluster_graph import generate_entity_id
 import os
 
+import networkx as nx
+import matplotlib.pyplot as plt
+
 log = logging.getLogger(__name__)
 
 
@@ -177,8 +180,175 @@ class LocalSearchMixedContext(LocalContextBuilder):
             
             ############### LLM-included flow ###############
 
-            # ENTITY ISOLATION
+            if path == 4:
+                rels= self.entity_text_embeddings.get_matching_relationships(
+                            query=query,
+                            text_embedder=lambda t: self.text_embedder.embed(t),
+                            k=10
+                        )
+
+                print(rels)
+                s=""
+                added_nodes={}
+                G = nx.Graph()
+
+                def add_node(dc,g,node):
+                    if node in dc: return 
+                    dc[node]=1
+                    g.add_node(node)
+                    g.add_edge("<G>",node)
+
+
+                for r in rels:
+
+                    source=r.source
+                    target=r.target
+
+                    add_node(added_nodes,G,source)
+                    add_node(added_nodes,G,target)
+                    
+                    # Add edges
+                    G.add_edge(source, target, _desc=r.text_unit)
+
+                    
+                    s += f"{source} -> {target}\n"
+
+                # Draw the graph
+                pos = nx.spring_layout(G)
+                nx.write_graphml_xml(G,"tmp.xml")
+                nx.draw(G, with_labels=True)
+                #edge_labels = nx.get_edge_attributes(G, '_desc')
+                #nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+                plt.show()
+                return s,{}
+            
+            if path in (5,6): # Audit Search
+               
+                s=""
+
+                args = {}
+                args['type'] = self.config.llm.type
+                args['model'] = self.config.llm.model
+                args['model_supports_json'] = self.config.llm.model_supports_json
+                args['api_base'] = self.config.llm.api_base
+                args['api_version'] = self.config.llm.api_version
+                args['deployment_name'] = self.config.llm.deployment_name          
+                #we don't send the prompt so that the extractor uses the generic promp for query
+                llm_conf = {}
+                llm_conf['llm'] = args
+
+                single_try=True
+
+                if single_try:
+                    # It is possible to miss some entities but unlikely since the input string is short
+                    llm_conf['max_gleanings'] = 0 # No continuation commands
+
+                q_entities = asyncio.run(run_gi(
+                    docs=[Document(text=query, id=str(randint(1,1000)))],
+                    entity_types=self.config.entity_extraction.entity_types,
+                    reporter = None,
+                    pipeline_cache=None,
+                    args=llm_conf,
+                ))
+
+                q_entities=q_entities.entities
+                
+                if len(q_entities)==0:
+                    print("[!] Query entitiy extraction failed. Check your query.")
+
+
+
+
+
+                ########### EXPERIMENTAL ALGORITHMS: This part changes a lot ###########
+
+                print("[>] Q E:",q_entities)
+
+                keepers=['.','_','-','/',':','\\']
+                excluders=[
+                    'sensitive data',
+                    'user',
+                    'file',
+                    'document'
+                ]
+                spare=[]
+                keywords=[]
+                for i in range(len(q_entities)):
+                    keep=0
+                    tmp=q_entities[i]['name'].lower()
+                    
+                    for k in keepers:
+                        if k in tmp:
+                            keep=1
+                    if not keep:
+                        if tmp in excluders or (" " in tmp and tmp != q_entities[i]['type'].lower()):
+                            print(f"ignoring <{tmp}>")
+                            spare.append(tmp)
+                            continue #reduce target set to increase quality of similarity search
+
+                        if tmp[-1]=='s': 
+                            print(f"Changing <{tmp}>")
+                            if tmp[:-1] in excluders:
+                                continue
+
+                    keywords.append(tmp)
+                
+                if len(keywords)==0 :
+                    keywords=spare
+
+                USE_KEYWORDS=False if path==5 else True
+
+                rels= self.entity_text_embeddings.extract_audit_relationships(
+                            query=query,
+                            text_embedder=lambda t: self.text_embedder.embed(t),
+                            k=10,
+                            keywords= keywords if USE_KEYWORDS else []
+                        )
+
+                print(rels)
+
+                added_nodes={}
+                G = nx.Graph()
+                G.add_node('<G>')
+                colors=['blue']
+                def add_node(dc,g,node:str,color):
+                    if node in dc: return 
+                    dc[node]=1
+                    g.add_node(node)
+                    colors.append(color)
+
+                for r in rels:
+                    source=r.source
+                    target=r.target
+                    s += f"{source} -> {target} : {r.description}\n\n"
+
+                    color='blue'
+                    for e in keywords:
+                        if e in (source.lower(),target.lower()) or e in r.description.lower():
+                            color='red'
+
+                    add_node(added_nodes,G,source,color)
+                    add_node(added_nodes,G,target,color)
+                    
+                    # Add edges
+                    G.add_edge(source, target, _desc=r.text_unit)
+                    G.add_edge("<G>",source)
+
+                nx.write_graphml_xml(G,"tmp.xml")
+                fig = plt.figure()
+                nx.draw(G, node_color=colors, with_labels=True, font_color='white', edge_color='white')
+                fig.set_facecolor("#00000F")
+                
+                #edge_labels = nx.get_edge_attributes(G, '_desc')
+                #nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+                plt.show()
+
+                return s,{}
+
+
             if path in (2,3):
+                # ENTITY ISOLATION
                 args = {}
                 args['type'] = self.config.llm.type
                 args['model'] = self.config.llm.model
@@ -301,7 +471,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     #create one default relationship to be handled in build_relationship_context
                     rel_list=[]
 
-                    rel_list.append(Relationship("00000","1","src","target",description="decr"))
+                    rel_list.append(Relationship("00000","1","John Lavorato","TIM BELDEN",description="John Lavorato " 
+                                                "warned Tim that he will be stoppped"))
                     relationships=rel_list
                     self.relationships = {
                     relationship.id: relationship for relationship in relationships
@@ -314,9 +485,24 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             
 
-            found=False        
-            __target_units=[]
+            found=False
+            target_units_margin=['d9b4a23b32c72ed82c8d78dc0aa745ba010be8cf74ce342f26bac3d42eabd200',
+                                'baf101552b1a06993bb46b037ede1346cb3823273c5d53d67ca7fe61e61ada44', ##
+                                'b445222ec5be20ebf1b01f26970d08b0c735851d4b1996272720b55c00b94faa',
+                                '61ea15d890458d2ce810c7d7de21b3e88701c40d70f670c14a89911161987df5',
+                                '4f7787bacf878309e37b52d13292eb79d48e979b036fac19edeb31a545a3353c']
+            
+            target_units_fiduciary=['e0b05c062ff7dfd03f5bce4b0900626691c32241d5692442d73bda362e625824',
+                                    'd6fd595677d53853f170a04fc07b2ccb4690eaabbce5da4bec7caf692ee375dc',                       
+                                    'b725c720c4ad73fcd35244e4712ca6ff787a6dd57d2da64a08e939bf6acc8966',
+                                    '9556326d4b4fc7cbf3bd76bfd7b7c580483e2f99359f76c29807c0c0109683bb',
+                                    '94f7a0dc59645d930b3a5437f7bea0f72e093bf42e0d846cd9d2ba633c2cc8d5',  ]
+            target_units_warning=['bc7dfa81df0f32942ad0ef8334db5332dd89b3154438df1f52910831942d27dd',
+                                'ba33f76547f1ba654d9d361b7edeb29a3929afc35c2b5ee998bc81ea3cbe1ca1']
+            target_units_misunderstanding=['0c3fb09b1fe1cb4c765c77eb14250b4810eef12ec6e5fc2b8505bd2cf231bd80']
 
+            __target_units=target_units_misunderstanding
+            #target_unit_margin='1d508582ddd16fb1cfc080227a722a8e69047d0c833073ca7f0031c555bb68da'
             for i in range(len(selected_entities)):
                 e=selected_entities[i]
                 for t in __target_units:
@@ -445,16 +631,17 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 row['rank']=e.rank
                 
                 r_lines=[]
-                for r in entity_to_related_entities[e.id]: 
-                    r_line={}                  
-                    r_line['id']=r['id']
-                    r_line['source']=r['source_id']
-                    r_line['target']=r['target_id']
-                    r_line['rank']=r['rank']
-                    r_line['weight']=r['weight']
-                    # TODO: relationship textunits are not currently stored, including for the nodes and the edge
-                    #r_line['text_unit_id']=self.text_units_kusto[ ast.literal_eval(r['text_unit_ids'])[0] ]
-                    r_lines.append(r_line)
+                if entity_to_related_entities:
+                    for r in entity_to_related_entities[e.id]: 
+                        r_line={}                  
+                        r_line['id']=r['id']
+                        r_line['source']=r['source_id']
+                        r_line['target']=r['target_id']
+                        r_line['rank']=r['rank']
+                        r_line['weight']=r['weight']
+                        # TODO: relationship textunits are not currently stored, including for the nodes and the edge
+                        #r_line['text_unit_id']=self.text_units_kusto[ ast.literal_eval(r['text_unit_ids'])[0] ]
+                        r_lines.append(r_line)
                 
                 row['relationships']=r_lines
                 row['text_unit_ids']=ast.literal_eval(e.text_unit_ids) if (
@@ -478,7 +665,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
 
             
             # success gauge
-            target_textunits=[ ]
+            target_textunits=['baf101552b1a06993bb46b037ede1346cb3823273c5d53d67ca7fe61e61ada44']
 
             uc=0
             for u in target_textunits:
@@ -660,7 +847,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
                     return
                 setattr(unit,column,ast.literal_eval(cvar))
 
-
+            #target_unit_margin='baf101552b1a06993bb46b037ede1346cb3823273c5d53d67ca7fe61e61ada44'
+            #target_unit_margin='1d508582ddd16fb1cfc080227a722a8e69047d0c833073ca7f0031c555bb68da'
 
             for unit in selected_text_units:
                 str_to_list(unit,'entity_ids')

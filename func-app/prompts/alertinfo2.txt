@@ -1,0 +1,143 @@
+
+-Goal-
+Given a document that is potentially relevant to this activity and a list of entity types, identify all entities of those types 
+from the text and all relationships among the identified entities.
+The document is a json file that describes the details of an alert that has been generated due to certain activities of a user. Each alert is linked to a policy.
+A policy has some rules and matching at least one of the rules can trigger an alert.
+The document might have one or more records. Each record is a set of key-value pairs.
+
+In the document:
+
+1- User key is specified by "UserKey" keyword. Identify the user key if it exists in the document.
+2- The operation that triggered a violation is specified by "EndpointOperation" keyword. Identify the operation if it exists in the document. 
+3- Each data access violation is specified by a "SensitiveInformationTypeName" keyword. Identify all sensitive data names that exist in the document.
+4- The file that is associated with the alert is specified by "ObjectId" keyword. Identify the file if it exists in the document.
+5- The ID of the generated alert is specified by "AlertIds" keyword. Identify the alert ID if it exist in the document.
+6- The user email address is specified by "UserId" keyword. Identify user email if it exists in the document.
+7- Policy ID is specified by "PolicyId" keyword. Identify the policy ID if it exists in the document.
+8- Rule ID that has been matched to generate the alert is specified by "ManagementRuleId" keyword. Identify rule ID if it exists in the document.
+
+For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized
+- entity_type: One of the following types: [{entity_types}]
+- entity_description: Comprehensive description of the entity's attributes and activities
+Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+
+Define a relationship between the identified entities and describe the relationship between them based on the information you found in previous steps.
+For each pair of source and target, extract the following information:
+- source_entity: the source user, as identified in previous steps
+- target_entity: name of the target entity, as identified in previous steps
+- relationship_description: describe the relationship based on the operation.
+- relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
+ Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
+
+After you have extracted the requested information:
+1. Return output in English as list of all the entities and relationships identified in previous steps. Use **{record_delimiter}** as the list delimiter
+2. Output {completion_delimiter} after the list of all entities
+
+
+######################
+-Examples-
+######################
+Example 1:
+Entity_types: ALERTID, USERKEY, EVENT, FILE, EMAIL, POLICYID, SENSITIVEDATA, MANAGEDRULEID, OPERATION
+Text:
+[
+                     {
+    "UserKey": "622dbcb",
+    "EndpointMetaData": {
+      "GroupName": "",
+      "Sha1": "",
+      "Platform": 1,
+      "OriginatingDomain": "",
+      "ParentArchiveHash": "",
+      "EndpointOperation": "FileCopiedToNetworkShare",
+      "RMSEncrypted": false,
+      "Sha256": "",
+      "DestinationLocationType": 2,
+      "EAv2Enriched": false,
+      "SensitiveInfoTypeData": [
+        {
+          "ClassifierType": "PatternMatch",
+          "SensitiveTypeSource": "OutOfBox",
+          "Confidence": 75,
+          "UniqueCount": 15,
+          "SensitiveInfoTypeId": "74a54de9-2a30-4aa0-a8aa-3d9327fc07c7",
+          "SensitiveInformationTypeName": "Australia Bank Account Number",
+          "Count": 15,
+          "SensitiveInformationDetailedClassificationAttributes": [
+            {
+              "Confidence": 65,
+              "Count": 15
+            },
+            {
+              "Confidence": 75,
+              "Count": 15
+            },
+            {
+              "Confidence": 85,
+              "Count": 0
+            }
+          ]
+        },
+        {
+          "ClassifierType": "PatternMatch",
+          "SensitiveTypeSource": "OutOfBox",
+          "Confidence": 75,
+          "UniqueCount": 11,
+          "SensitiveInfoTypeId": "dd0fe2bc-7bcf-455f-bac1-83b1e3eb25fd",
+          "SensitiveInformationTypeName": "New Zealand Inland Revenue number",
+          "Count": 11,
+          "SensitiveInformationDetailedClassificationAttributes": [
+            {
+              "Confidence": 65,
+              "Count": 11
+            },
+            {
+              "Confidence": 75,
+              "Count": 11
+            },
+            {
+              "Confidence": 85,
+              "Count": 0
+            }
+          ]
+        }
+      ],
+      "ObjectId": "C:\\Users\\test\\Documents\\test.xlsx",
+      "UserId": "test@mail.com",
+      "PolicyId": "pol_0000",
+      "ManagementRuleId":"CCC999",
+      "AlertIds": [
+        "ALT_1122"
+      ]
+    }
+]
+                
+######################
+Output:
+("entity"{tuple_delimiter}622dbcb{tuple_delimiter}USERKEY{tuple_delimiter}622dbcb is a user key)
+{record_delimiter}
+("entity"{tuple_delimiter}FileCopiedToNetworkShare{tuple_delimiter}OPERATION{tuple_delimiter}FileCopiedToNetworkShare is the operation that the user 622dbcb executed that resulted in the alert 'ALT_1122')
+{record_delimiter}
+("entity"{tuple_delimiter}Australia Bank Account Number{tuple_delimiter}SENSITIVEDATA{tuple_delimiter}Sensitive data named 'Australia Bank Account Number' was linked to user 622dbcb in the alert 'ALT_1122' from policy pol_0000)
+{record_delimiter}
+("entity"{tuple_delimiter}New Zealand Inland Revenue number{tuple_delimiter}SENSITIVEDATA{tuple_delimiter}Sensitive data named 'New Zealand Inland Revenue number' was linked to user 622dbcb in the alert 'ALT_1122' from policy pol_0000)
+(record_delimiter)
+("entity"{tuple_delimiter}C:\\Users\\test\\Documents\\test.xlsx{tuple_delimiter}FILE{tuple_delimiter}"C:\\Users\\test\\Documents\\test.xlsx" is associated with the violation of policy pol_0000)
+(record_delimiter)
+("entity"{tuple_delimiter}1122{tuple_delimiter}ALERTID{tuple_delimiter}1122 is the alert ID that was triggered from policy pol_0000 for user 622dbcb)
+(record_delimiter)
+("entity"{tuple_delimiter}test@mail.com{tuple_delimiter}EMAIL{tuple_delimiter}test@mail.com is the email associated with the user 622dbcb)
+(record_delimiter)
+("entity"{tuple_delimiter}pol_0000{tuple_delimiter}POLICYID{tuple_delimiter}pol_0000 is the policy for which the alert ALT_1122 has been generated for user 622dbcb)
+(record_delimiter)
+("entity"{tuple_delimiter}CCC999{tuple_delimiter}MANAGEDRULEID{tuple_delimiter}CCC999 is the rule ID from policy pol_0000 that was matched for the alert ALT_1122)
+{completion_delimiter}
+######################
+-Real Data-
+######################
+Entity_types: {entity_types}
+Text: {input_text}
+######################
+Output:

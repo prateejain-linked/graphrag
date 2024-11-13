@@ -68,6 +68,8 @@ from graphrag.index.workflows.default_workflows import (
     join_text_units_to_relationship_ids,
 )
 
+from graphrag.common.utils.common_utils import __CS__env, WF_COMM_DIS_KEY
+
 log = logging.getLogger(__name__)
 
 
@@ -121,19 +123,30 @@ def create_pipeline_config(settings: GraphRagConfig, verbose=False) -> PipelineC
         and create_final_covariates not in skip_workflows
     )
 
+    if __CS__env(WF_COMM_DIS_KEY):
+        wf=[
+            *_document_workflows(settings, embedded_fields),
+            *_text_unit_workflows(settings, covariates_enabled, embedded_fields),
+            *_graph_workflows(settings, embedded_fields),
+            #*_community_workflows(settings, covariates_enabled, embedded_fields),
+            *(_covariate_workflows(settings) if covariates_enabled else []),
+        ]
+    else:
+        wf=[
+            *_document_workflows(settings, embedded_fields),
+            *_text_unit_workflows(settings, covariates_enabled, embedded_fields),
+            *_graph_workflows(settings, embedded_fields),
+            *_community_workflows(settings, covariates_enabled, embedded_fields),
+            *(_covariate_workflows(settings) if covariates_enabled else []),
+        ]
+
     result = PipelineConfig(
         root_dir=settings.root_dir,
         input=_get_pipeline_input_config(settings),
         reporting=_get_reporting_config(settings),
         storage=_get_storage_config(settings),
         cache=_get_cache_config(settings),
-        workflows=[
-            *_document_workflows(settings, embedded_fields),
-            *_text_unit_workflows(settings, covariates_enabled, embedded_fields),
-            *_graph_workflows(settings, embedded_fields),
-            *_community_workflows(settings, covariates_enabled, embedded_fields),
-            *(_covariate_workflows(settings) if covariates_enabled else []),
-        ],
+        workflows=wf,
         graphdb_params=settings.graphdb
     )
 

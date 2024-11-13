@@ -1,0 +1,130 @@
+
+-Goal-
+Given a document that is potentially relevant to this activity and a list of entity types, identify all entities of those types 
+from the text and all relationships among the identified entities. The document can be a json strcuture or plain text.
+The document might have one or more records. Each record is a set of key-value pairs.
+
+In each record:
+
+1- The source user is specified by "f3u" keyword. Identify the source if it exists in the document. 
+2- The target user is specified by "tid" keyword and is the person that user sent a message to. Identify the target if it exists in the document.
+3- Operation is specified by "op" keyword and shows the what the source has requested the target. Identify the operation if it exists in the document.
+4- Explanation is specified by "ad" keyword which ellaborates the operation found in the previous step. Identify the explanation if it exists in the document.
+
+ 
+For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized
+- entity_type: One of the following types: [{entity_types}]
+- entity_description: Comprehensive description of the entity's attributes and activities
+Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+
+Define a relationship between the source and target and describe the relationship between them based on the operation and explanation found in previous steps.
+For each pair of source and target, extract the following information:
+- source_entity: the source user, as identified in previous steps
+- target_entity: name of the target entity, as identified in previous steps
+- relationship_description: describe the relationship based on the operation.
+- relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
+ Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
+
+After you have extracted the requested information:
+1. Return output in English as list of all the entities and relationships identified in previous steps. Use **{record_delimiter}** as the list delimiter
+2. Output {completion_delimiter} after the list of all entities
+
+
+######################
+-Examples-
+######################
+Example 1:
+Entity_types: USER, OPERATION, EVENT
+Text:
+[
+    {
+        "Tid": "1",
+        "Aid": "1",
+        "ANm": "User21ByQP",
+        "ATp": 2,
+        "ACt": 6,
+        "CId": "46def",
+        "RId": "f3c17c32b0",
+        "ADt": "2024-08-21T03:48:00Z",
+        "ATt": "Activity_Single",
+        "ASt": 1,
+        "ASv": 2,
+        "ASc": "Office 365 Security & Compliance",
+        "ADa": {
+            "f3u": "user00@QuarantineTest.onmicrosoft.com",
+            "etq": "0",
+            "ts": "2024-08-21T03:47:00Z",
+            "te": "2024-08-21T03:48:00Z",
+            "op": "QuarantineRequestReleaseMessage",
+            "wl": "Quarantine",
+            "tid": "775e3ce47",
+            "tdc": "1",
+            "reid": "ad390193fcda",
+            "wsrt": "2024-08-21T03:48:22",
+            "mdt": "Audit",
+            "rid": "f37c32b0",
+            "cid": "46dfee0cf",
+            "ad": "Intended to alert only user00",
+            "lon": "QuarantineRequestReleaseMessage",
+            "an": "User21ByQP",
+            "sev": "High"
+        },
+        "Esc": [
+            {
+                "sid": "11111111-1111-1111-1111-111111111111",
+                "st": 1,
+                "set": 1
+            }
+        ],
+        "AEn": [
+            {
+                "etype": "User",
+                "eid": "user21@QuarantineTestSDF1.onmicrosoft.com",
+                "tid": "775e3ce47",
+                "ts": "2024-08-21T03:47:32Z",
+                "te": "2024-08-21T03:47:32Z",
+                "op": "QuarantineRequestReleaseMessage",
+                "tdc": "1",
+                "suid": "user21@QuarantineTestSDF1.onmicrosoft.com",
+                "ut": "Regular",
+                "ssic": "0",
+                "lon": "QuarantineRequestReleaseMessage",
+                "Esc": [
+                    {
+                        "sid": "11111111-1111-1111-1111-111111111111",
+                        "st": 1,
+                        "set": 3
+                    }
+                ]
+            }
+        ],
+        "AXEn": [],
+        "Rcp": "apple@QuarantineTestSDF1.onmicrosoft.com, Admin@QuarantineTestSDF1.onmicrosoft.com",
+        "Pri": {
+            "NotificationLanguage": "en-US",
+            "NotifyUserThrottleThreshold": 300,
+            "NotificationEnabled": true,
+            "NotifyUserSuppressionExpiryDate": null,
+            "RecipientList": [
+                "apple@QuarantineTestSDF1.onmicrosoft.com",
+                "Admin@QuarantineTestSDF1.onmicrosoft.com"
+            ]
+        }
+    }
+]
+######################
+Output:
+("entity"{tuple_delimiter}user00@QuarantineTestSDF1.onmicrosoft.com{tuple_delimiter}USER{tuple_delimiter}use00@QuarantineTestSDF1.onmicrosoft.com is the source.)
+{record_delimiter}
+("entity"{tuple_delimiter}775e3ce47{tuple_delimiter}TARGET{tuple_delimiter}775e3ce47 is the target for user00@QuarantineTestSDF1.onmicrosoft.com)
+{record_delimiter}
+("entity"{tuple_delimiter}QuarantineRequestReleaseMessage{tuple_delimiter}OPERATION{tuple_delimiter}QuarantineRequestReleaseMessage is the operation which was intended to alert only user00)
+{completion_delimiter}
+######################
+-Real Data-
+######################
+Entity_types: {entity_types}
+Text: {input_text}
+######################
+Output:

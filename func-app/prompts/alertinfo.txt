@@ -1,0 +1,119 @@
+
+-Goal-
+Given a document that is potentially relevant to this activity and a list of entity types, identify all entities of those types 
+from the text and all relationships among the identified entities. The document can be a json strcuture or plain text.
+The document might have one or more records. Each record is a set of key-value pairs and describes an alert.
+For each alert there might be a field called "AlertEntities", in which there might be multiple record that describe
+the associated entities with the alert.
+
+In each record:
+
+1- Alert ID is specified by "AlertId" keyword. Identify the alert ID if it exists in the document.
+2- The user for whom the alert has been generated is specified "EntityId" keyword. Identify the user if it exists in the document. 
+3- The tenant ID is specified by "TenantId" keyword and is the person that user sent a message to. Identify the tenant if it exists in the document.
+4- Explanation is specified by "AlertData" keyword which ellaborates on the operation alert. Identify the explanation if it exists in the document.
+
+ 
+For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized
+- entity_type: One of the following types: [{entity_types}]
+- entity_description: Comprehensive description of the entity's attributes and activities
+Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+
+Define a relationship between the user and tenant and describe the relationship between them based on the alert data and the information you found in previous steps.
+For each pair of source and target, extract the following information:
+- source_entity: the source user, as identified in previous steps
+- target_entity: name of the target entity, as identified in previous steps
+- relationship_description: describe the relationship based on the operation.
+- relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
+ Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
+
+After you have extracted the requested information:
+1. Return output in English as list of all the entities and relationships identified in previous steps. Use **{record_delimiter}** as the list delimiter
+2. Output {completion_delimiter} after the list of all entities
+
+
+######################
+-Examples-
+######################
+Example 1:
+Entity_types: ALERTID, ALERTNAME, USER, EVENT
+Text:
+[
+                     {
+                       "Identity": {},
+                       "TenantId": "TT000000",
+                       "AlertId": "AA9999",
+                       "AlertType": 2,
+                       "TemplateType": "Activity_Single",
+                       "AlertName": "DLP-High volume of content detected SEI/MS DLP Policy --00000",
+                       "CorrelationId": "259d2d8e-e92f-48c7-8e62-c6faf3b456de",
+                       "CorrelationPolicyId": null,
+                       "RuleId": "abb00cf5-b9d3-429e-b511-c0aba1aeab95",
+                       "AlertStatus": 1,
+                       "AlertSeverity": 1,
+                       "AlertCategory": 1,
+                       "AssignedTo": null,
+                       "ActionsPerformed": 0,
+                       "Comments": "New alert",
+                       "Notifications": [],
+                       "AlertEntities": [
+                         {
+                           "Identity": {},
+                           "EntityId": "user11@mail.com",
+                           "EntityType": 1,
+                           "Id": "00000000-0000-0000-0000-000000000000",
+                           "TenantId": "TT000000",
+                           "AlertId": "AA9999",
+                           "AlertData": "{\"etype\":\"User\",\"eid\":\"user11@mail.com\",\"tid\":\"TT000000\",\"ts\":\"2024-10-30T00:18:23.0000000Z\",\"te\":\"2024-10-30T00:18:23.0000000Z\",\"op\":\"DlpRuleMat
+                   ch\",\"tdc\":\"1\",\"suid\":\"user11@mail.com\",\"ut\":\"Regular\",\"ssic\":\"0\",\"lon\":\"DlpRuleMatch\"}",
+                           "CreatedDateTime": "2024-11-05T19:52:33.48Z",
+                           "ChangedDateTime": "2024-11-05T19:52:33.48Z",
+                           "EntityScopes": [],
+                           "ObjectState": 0,
+                           "PhysicalInstanceID": null
+                         },
+                         {
+                           "Identity": {},
+                           "EntityId": "user22@mail.com",
+                           "EntityType": 1,
+                           "Id": "00000000-0000-0000-0000-000000000000",
+                           "TenantId": "TT000000",
+                           "AlertId": "AA9999",
+                           "AlertData": "{\"etype\":\"User\",\"eid\":\"user22@mail.com\",\"tid\":\"TT000000\",\"ts\":\"2024-10-30T00:18:12.0000000Z\",\"te\":\"2024-10-30T00:18:12.0000000Z\",\"op\":\"DlpRul
+                   eMatch\",\"tdc\":\"1\",\"suid\":\"user22@mail.com\",\"ut\":\"Regular\",\"ssic\":\"0\",\"lon\":\"DlpRuleMatch\"}",
+                           "CreatedDateTime": "2024-11-05T19:56:42.7133333Z",
+                           "ChangedDateTime": "2024-11-05T19:56:42.7133333Z",
+                           "EntityScopes": [],
+                           "ObjectState": 0,
+                           "PhysicalInstanceID": null
+                         },
+                       ]
+                     }
+]
+                
+######################
+Output:
+("entity"{tuple_delimiter}AA9999{tuple_delimiter}ALERTID{tuple_delimiter}AA9999 is the alert ID)
+{record_delimiter}
+("entity"{tuple_delimiter}DLP-High volume of content detected SEI/MS DLP Policy --00000{tuple_delimiter}ALERTNAME{tuple_delimiter}This is the name of the alert)
+{record_delimiter}
+("entity"{tuple_delimiter}TT000000{tuple_delimiter}TENANT{tuple_delimiter}TT000000 is the tenant for which the alert was generated)
+{record_delimiter}
+("entity"{tuple_delimiter}user11@mail.com{tuple_delimiter}USER{tuple_delimiter}An alert was generated for user11@mail.com)
+{record_delimiter}
+("entity"{tuple_delimiter}user22@mail.com{tuple_delimiter}USER{tuple_delimiter}An alert was generated for user22@mail.com)
+{record_delimiter}
+("entity"{tuple_delimiter}DlpRuleMatch{tuple_delimiter}EVENT{tuple_delimiter}An alert was generated using DlpRuleMatch)
+{record_delimiter}
+("relationship"{tuple_delimiter}user11@mail.com{tuple_delimiter}TT000000{tuple_delimiter}An alert was generated for user11@mail.com in TT000000 tenant{tuple_delimiter}5)
+{record_delimiter}
+("relationship"{tuple_delimiter}user22@mail.com{tuple_delimiter}TT000000{tuple_delimiter}An alert was generated for user22@mail.com in TT000000 tenant{tuple_delimiter}5)
+{completion_delimiter}
+######################
+-Real Data-
+######################
+Entity_types: {entity_types}
+Text: {input_text}
+######################
+Output:

@@ -135,7 +135,9 @@ class LocalSearch(BaseSearch):
             ]
 
             pt_enabled = os.environ.get("PROTOTYPE")
-            if pt_enabled:
+            if path > 3:
+                response=context_text
+            elif pt_enabled:
                 response=" <ProtoType env enabled. Not proceeding to LLM> "
             else:
                 response = self.llm.generate(

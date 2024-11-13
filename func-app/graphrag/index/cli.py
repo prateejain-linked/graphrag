@@ -47,6 +47,10 @@ warnings.filterwarnings("ignore", message=".*NumbaDeprecationWarning.*")
 
 log = logging.getLogger(__name__)
 
+
+
+
+
 def redact(input: dict) -> str:
     """Sanitize the config json."""
 
@@ -95,6 +99,7 @@ def load_doc_stats(in_base:str,out_base:str,folders,context_id,config_args):
     config_args.update({"vector_name": ''})
     config_args.update({"reports_name": ''})
     config_args.update({"text_units_name":''})
+    config_args.update({"relationships_name":''})
     config_args.update({"docs_tbl_name": f"docs_{context_id}"})
 
     kusto= VectorStoreFactory.get_vector_store(
@@ -156,6 +161,7 @@ def index_cli(
     cli: bool = False,
     use_kusto_community_reports: bool = False,
     optimized_search: bool = False,
+    try_index=True
  
 ):
     """Run the pipeline with the given config."""
@@ -163,7 +169,7 @@ def index_cli(
     logging.info("Platform: "+sys.platform)
     #root = Path(__file__).parent.parent.parent.__str__()
     run_id = resume or time.strftime("%Y%m%d-%H%M%S")
-    _enable_logging(root, run_id, verbose)
+    #_enable_logging(root, run_id, verbose)
     progress_reporter = _get_progress_reporter("none")
     if init: 
         _initialize_project_at(root, progress_reporter)
@@ -259,10 +265,11 @@ def index_cli(
 
     ################ INDEXING ITERATION
     orig_storage_base=pipeline_config.storage.base_dir
-    orig_input_base=" "
+    orig_input_base="..\\..\\..\\PT_audit"
     #input_full_path = os.path.dirname(__file__) + '\\..\\.' + root + "\\" + pipeline_config.input.base_dir
+    #input_full_path = "/home/site/wwwroot/data/email_store"
     #i_count=len(os.listdir(root+"\\input"))
-    input_full_path = " "
+    input_full_path = "C:\\src\\upstream-exe\\PT_audit"
     folders=os.listdir(input_full_path)
     i_count=len(folders)
 
@@ -285,10 +292,12 @@ def index_cli(
     end = min(i_count,batch_f_index+batch_size)
     i_start=batch_f_index
 
+    '''
     if i_start==0:
         logging.info("Loading document stats in kusto")
         cc=_create_graphrag_config( root,config) #from query module
         load_doc_stats(input_full_path,orig_storage_base,folders,context_id,cc.embeddings.vector_store)
+    '''
 
     for p_id in range(i_start,end):
 
@@ -318,11 +327,17 @@ def index_cli(
         else:
             progress_reporter.success("All workflows completed successfully.")
             
+            if not try_index: 
+                batch_f_index += 1
+                logging.info("Updating batch file index: "+str(batch_f_index))
+                f.seek(0,0)
+                f.write(str(batch_f_index))
+            else:
+                logging.info("Requested not to update index.")
+
+
+            # update text units parquet file and add embedding 
             
-            batch_f_index += 1
-            logging.info("Updating batch file index: "+str(batch_f_index))
-            f.seek(0,0)
-            f.write(str(batch_f_index))
     
     f.close()
 
@@ -501,5 +516,7 @@ def _enable_logging(root_dir: str, run_id: str, verbose: bool) -> None:
         level=logging.DEBUG if verbose else logging.INFO,
         handlers=[handler, fileHandler]
     )
+
+
 
 

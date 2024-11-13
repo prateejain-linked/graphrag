@@ -50,6 +50,8 @@ import json
 import ast
 import uuid
 
+
+
 reporter = PrintProgressReporter("")
 
 reporter = PrintProgressReporter("")
@@ -74,6 +76,8 @@ def __get_embedding_description_store(
     config_args.update({"vector_name": vector_name})
     config_args.update({"reports_name": f"reports_{context_id}" if context_id else "reports"})
     config_args.update({"text_units_name": f"text_units_{context_id}"})
+    config_args.update({"relationships_name": f"relationships_{context_id}"})
+    config_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{context_id}"})
     config_args.update({"docs_tbl_name": f"docs_{context_id}"})
 
     description_embedding_store = VectorStoreFactory.get_vector_store(
@@ -284,6 +288,9 @@ def cs_search(
     else:
         result = search_engine.search(query=query,path=path)
 
+    if path>3:
+        return result.response
+
     
 
     pt_enabled = os.environ.get("PROTOTYPE")
@@ -478,8 +485,8 @@ def summarize(query_id:str,
                                                                 storage_account_blob_url=config.storage.storage_account_blob_url)
     
     index_storage_client = BlobPipelineStorage(connection_string=None,
-                                                                container_name=config.storage.container_name,
-                                                                storage_account_blob_url=config.storage.storage_account_blob_url)
+                                                                container_name="indexing",
+                                                                storage_account_blob_url="https://indexedoutputartifacts.blob.core.windows.net/")
 
 
     blob_data = asyncio.run(blob_storage_client.get(f"query/{query_id}/output.json"))
