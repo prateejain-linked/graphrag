@@ -197,7 +197,6 @@ class KustoVectorStore(BaseVectorStore):
                                preselected_entities=[],
                                **kwargs: Any
     ) -> list[Entity]:
-        
 
         query_embedding = text_embedder(text)
 
@@ -248,7 +247,9 @@ class KustoVectorStore(BaseVectorStore):
         self.client.execute(self.database,f".drop table {self.reports_name} ifexists")
 
     def setup_entities(self) -> None:
-        command = f".drop table {self.collection_name} ifexists"
+        if self._check_if_table_exists(self.collection_name):
+            return
+        command = f".drop table {self.collection_name} ifexists	"
         self.client.execute(self.database, command)
 
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -409,10 +410,10 @@ class KustoVectorStore(BaseVectorStore):
         r=dataframe_from_result_table(r.primary_results[0])
 
         pt_enabled = os.environ.get("PROTOTYPE")
-        
 
-        
-        res=[]     
+
+
+        res=[]
         cite_index=1
         for _,row in  r.iterrows():
             u=TextUnit(
@@ -435,8 +436,6 @@ class KustoVectorStore(BaseVectorStore):
     def get_extracted_reports(
         self, community_ids: list[int], **kwargs: Any
     ) -> list[CommunityReport]:
-        
-        
 
 
         community_ids = ", ".join([str(id) for id in community_ids])

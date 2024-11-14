@@ -1,11 +1,4 @@
-import azure.functions as func
-import datetime
-import json
-import logging
-import csv
-import codecs
-from graphrag.index.cli import index_cli
-import os 
+import os
 
 import azure.functions as func
 from context_switch_function import context_functions
