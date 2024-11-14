@@ -511,7 +511,7 @@ def summarize(query_id:str,
             return "Invalid query file. Document ID configuration not supported"
         doc=doc[0]
 
-        list_relationships=dict_json.get("relationships",[])
+        #list_relationships=dict_json.get("relationships",[])
         list_text_units=dict_json["text_unit_ids"]
 
         #LOAD everything we need from this document

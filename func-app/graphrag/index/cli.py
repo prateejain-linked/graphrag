@@ -96,7 +96,7 @@ def index_cli(
     run_id = resume or time.strftime("%Y%m%d-%H%M%S")
     _enable_logging(root, run_id, verbose)
     progress_reporter = _get_progress_reporter("none")
-    if init: 
+    if init:
         _initialize_project_at(root, progress_reporter)
     if overlay_defaults:
         pipeline_config: str | PipelineConfig = _create_default_config(
@@ -311,15 +311,7 @@ def _read_config_parameters(root: str, config: str | None, reporter: ProgressRep
     settings_json = (
         Path(config)
         if config and Path(config).suffix == ".json"
-<<<<<<< HEAD
-<<<<<<< HEAD
-        else _root / "setting/settings.json"
-=======
-        else _root / "settings.json"
->>>>>>> Users/gbarrnsnchez/mergebranches (#87)
-=======
         else _root / "settings/settings.json"
->>>>>>> Merging conflict resolution.
     )
 
     if settings_yaml.exists():
