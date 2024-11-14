@@ -254,11 +254,10 @@ class GraphDBClient:
                                     'rank':rank,
                                     'source_id':source_id, 'target_id':target_id})
 
+        return json_data
 
 
         #####################################################################
-        
-        return json_data
 
     def wait_for_jobs(self):
         """Wait for all running jobs to complete."""

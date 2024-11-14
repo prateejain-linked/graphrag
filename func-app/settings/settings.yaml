@@ -62,7 +62,6 @@ graphdb:
   cosmos_url: "https://graphdbhotstoreindexv2.documents.azure.com:443/"
   username: "/dbs/entitygraph/colls/graphentities"
   account_key: ${COSMOS_ACCOUNT_KEY}
-
 chunks:
   size: 500
   overlap: 100

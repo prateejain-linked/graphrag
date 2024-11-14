@@ -198,7 +198,6 @@ class KustoVectorStore(BaseVectorStore):
                                **kwargs: Any
     ) -> list[Entity]:
 
-
         query_embedding = text_embedder(text)
 
         if preselected_entities==[]:
@@ -358,6 +357,8 @@ class KustoVectorStore(BaseVectorStore):
     def load_text_units(self, units: list[TextUnit], overwrite: bool = False) -> None:
         df = pd.DataFrame(units)
 
+
+
         if overwrite:
             self.setup_text_units()
 
@@ -379,7 +380,6 @@ class KustoVectorStore(BaseVectorStore):
     def setup_docs(self) -> None: #Called by indexer
         command = f".drop table {self.docs_tbl_name} ifexists"
         self.client.execute(self.database, command)
-
         command = f".create table {self.docs_tbl_name} (id: string, in_path:string, \
             out_path: string)"
 
@@ -387,7 +387,6 @@ class KustoVectorStore(BaseVectorStore):
 
     def load_doc_stats(self, rows) -> None: #called by indexer
         df = pd.DataFrame(rows)
-
         ingestion_command = f".ingest inline into table {self.docs_tbl_name} <| {df.to_csv(index=False, header=False)}"
         self.client.execute(self.database, ingestion_command)
 
@@ -403,7 +402,6 @@ class KustoVectorStore(BaseVectorStore):
             id_list=ast.literal_eval(e.text_unit_ids)
             unit_ids.extend([id for id in id_list])
         return self.retrieve_text_units_by_id(unit_ids)
-
     def retrieve_text_units_by_id(self,unit_ids):
         unit_ids_str=", ".join(f"'{id}'" for id in unit_ids )
 
@@ -474,13 +472,13 @@ class KustoVectorStore(BaseVectorStore):
             raise
     
     def get_matching_relationships(self, query: str, text_embedder: TextEmbedder, k: int = 10,
-                               entity_ids=[], depth=1,
+                               relationship_ids=[], depth=1,
                                **kwargs: Any
     ):
         # Get top text units using similarity search
         query_embedding = text_embedder(query)
 
-        if entity_ids==[]:
+        if relationship_ids==[]:
             cmd = f"""
                 let query_vector = dynamic({query_embedding});
                 {self.relationships_name}
@@ -491,7 +489,7 @@ class KustoVectorStore(BaseVectorStore):
             cmd = f"""
                 let query_vector = dynamic({query_embedding});
                 {self.relationships_name} | 
-                where id in ({entity_ids}) | 
+                where id in ({relationship_ids}) | 
                 | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
                 | top {k} by similarity desc
                 """
@@ -566,11 +564,11 @@ class KustoVectorStore(BaseVectorStore):
         query_embedding = text_embedder.embed(query)
         kusto_query = f"""
         let query_vector = dynamic({query_embedding});
-        {self.collection_name}
+        {self.relationships_name}
         | where source_id in ({current_vertices_str})
         | where target_id !in ({excluding_vertices_str})
         | where ({exclude_edge_id_filter})
-        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
         | sort by similarity desc
         """
         response = self.client.execute(self.database, kusto_query)
@@ -600,11 +598,11 @@ class KustoVectorStore(BaseVectorStore):
         query_embedding = text_embedder.embed(query)
         kusto_query = f"""
         let query_vector = dynamic({query_embedding});
-        {self.collection_name}
+        {self.relationships_name}
         | where source_id in ({current_vertices_str})
         | where target_id in ({including_vertices_str})
         | where ({exclude_edge_id_filter})
-        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
         | sort by similarity desc
         """
         response = self.client.execute(self.database, kusto_query)
@@ -623,27 +621,3 @@ class KustoVectorStore(BaseVectorStore):
             for row_index, row in df.iterrows()
         ]
     
-    def get_top_k_relationships_by_text_unit_similarity(self,all_edges_ids,top_k,query,text_embedder):
-        query_embedding = text_embedder.embed(query)
-        edges_ids_str=", ".join(f"'{id}'" for id in all_edges_ids )
-        kusto_query = f"""
-        let query_vector = dynamic({query_embedding});
-        {self.collection_name}
-        | where id in ({edges_ids_str})
-        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
-        | top {top_k} by similarity desc
-        """
-        response = self.client.execute(self.database, kusto_query)
-        df = dataframe_from_result_table(response.primary_results[0])
-        return [
-            Relationship(
-                id=row['id'],
-                source=row['source'],
-                target=row['target'],
-                short_id=row_index,
-                source_id=row['source_id'],
-                target_id=row['target_id'],
-                text_unit_ids=row['text_unit_ids'],
-            )
-            for row_index, row in df.iterrows()
-        ]
