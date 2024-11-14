@@ -564,11 +564,11 @@ class KustoVectorStore(BaseVectorStore):
         query_embedding = text_embedder.embed(query)
         kusto_query = f"""
         let query_vector = dynamic({query_embedding});
-        {self.collection_name}
+        {self.relationships_name}
         | where source_id in ({current_vertices_str})
         | where target_id !in ({excluding_vertices_str})
         | where ({exclude_edge_id_filter})
-        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
         | sort by similarity desc
         """
         response = self.client.execute(self.database, kusto_query)
@@ -598,11 +598,11 @@ class KustoVectorStore(BaseVectorStore):
         query_embedding = text_embedder.embed(query)
         kusto_query = f"""
         let query_vector = dynamic({query_embedding});
-        {self.collection_name}
+        {self.relationships_name}
         | where source_id in ({current_vertices_str})
         | where target_id in ({including_vertices_str})
         | where ({exclude_edge_id_filter})
-        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
+        | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
         | sort by similarity desc
         """
         response = self.client.execute(self.database, kusto_query)
