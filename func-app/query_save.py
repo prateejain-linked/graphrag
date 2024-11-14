@@ -5,7 +5,7 @@ import logging
 import csv
 import codecs
 from graphrag.index.cli import index_cli
-import os 
+import os
 
 from graphrag.query.cli import run_local_search, summarize,rrf_scoring,expand_node_graph
 from time import sleep
@@ -17,7 +17,7 @@ query_functions = func.Blueprint()
 def query(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Query.')
     logging.info("Parameters: "+str(req.params))
-    
+
     if 'context_id' in req.params:
         context_id=req.params['context_id']
         query=req.params['query']
@@ -38,8 +38,9 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
                 query=query,
                 use_kusto_community_reports=False,
                 path=int(path),
+                override=req.params['cube_id'] if 'cube_id' in req.params else None
             )
-    
+
     return func.HttpResponse(
         "\n[>] Query completed\n\n\n"+result,
         status_code=200
@@ -51,7 +52,7 @@ def query(req: func.HttpRequest) -> func.HttpResponse:
 def query_save(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Query and save.')
     logging.info("Parameters: "+str(req.params))
-    
+
     if 'context_id' in req.params:
         context_id=req.params['context_id']
         query=req.params['query']
@@ -72,9 +73,10 @@ def query_save(req: func.HttpRequest) -> func.HttpResponse:
                 query=query,
                 use_kusto_community_reports=False,
                 path=int(path),
-                save_result=True
+                save_result=True,
+                override=req.params['cube_id'] if 'cube_id' in req.params else None
             )
-    
+
     json_res={'query_id':result}
 
     return func.HttpResponse(
@@ -87,9 +89,9 @@ def query_save(req: func.HttpRequest) -> func.HttpResponse:
 def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
 
     query_id = req.params['query_id']
-    output = summarize(query_id=query_id, root_dir='settings')
+    output = summarize(query_id=query_id, root_dir='settings', override=req.params['cube_id'] if 'cube_id' in req.params else None)
     return func.HttpResponse(
-        output,
+        json.dumps(output),
         status_code=200
     )
 
@@ -99,7 +101,8 @@ def summarize_query(req: func.HttpRequest) -> func.HttpResponse:
 def rrf(req: func.HttpRequest) -> func.HttpResponse:
 
     query_ids = req.params['query_ids']
-    output = rrf_scoring(query_ids=query_ids,root_dir='settings')
+    output = rrf_scoring(query_ids=query_ids,root_dir='settings',
+                override=req.params['cube_id'] if 'cube_id' in req.params else None)
     json_res={'query_id':output}
     return func.HttpResponse(
         json.dumps(json_res),

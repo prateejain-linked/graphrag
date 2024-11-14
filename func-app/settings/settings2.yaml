@@ -1,0 +1,8 @@
+input:
+  container_name: emailset2
+
+storage:
+  container_name: indexing2
+
+output_storage:
+  container_name: queryresult2
