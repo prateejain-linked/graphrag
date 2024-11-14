@@ -218,6 +218,85 @@ def context_switch(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.storage.blob import BlobServiceClient
+from time import sleep
+import json
+
+@context_functions.route(route="context-data")
+def context_data(req: func.HttpRequest) -> func.HttpResponse:
+    '''Retrieve context data from Azure Blob'''
+    logging.info('HTTP route to retrieve context data.')
+
+    # Azure Blob Storage connection details
+    storage_account_blob_url = os.getenv('AZURE_WATERMARK_ACCOUNT_URL')
+    container_name = "context2"
+    if 'cube_id' in req.params:
+        cube_id = req.params['cube_id']
+        if cube_id == '1':
+            container_name = "context"
+        else:
+            container_name = "context" + req.params['cube_id']
+    blob_name = req.params.get('blob_name')
+
+    try:
+        # Create the BlobServiceClient object
+        if 'AZURE_CLIENT_ID' in os.environ:
+            print("AZURE_CLIENT_ID: ", os.environ['AZURE_CLIENT_ID'])
+
+        # credential = DefaultAzureCredential()
+        credential = DefaultAzureCredential(managed_identity_client_id=os.environ['AZURE_CLIENT_ID'], exclude_interactive_browser_credential = False)
+        print("DefaultAzureCredential: ", credential)
+        sleep(1)
+        blob_service_client = BlobServiceClient(
+                account_url=storage_account_blob_url,
+                credential=credential,
+            )
+        print("Successfully connected to Blob Storage")
+
+        # Get the container client
+        container_client = blob_service_client.get_container_client(container_name)
+
+        # Get the blob client
+        if blob_name is not None:
+            blob_client = container_client.get_blob_client(blob_name)
+            blob_data = blob_client.download_blob().readall()
+        else:
+            # Return a list of all blobs in the container
+            blobs = container_client.list_blobs()
+            # Convert the blobs to a list
+            blob_data = [blob.name for blob in blobs]
+            # Filter to just get the files which follow the pattern *_init.json
+            blob_data = [blob for blob in blob_data if blob.endswith("_init.json")]
+            # Read each blob content and return a list of all the jsons
+            blob_data = [container_client.get_blob_client(blob).download_blob().readall().decode('utf-8') for blob in blob_data]
+            # Test only returning an array of the first blob
+            # blob_data = blob_data[0]
+            # as an array
+            # blob_data = [blob_data]
+
+            print(blob_data)
+            return func.HttpResponse(
+                body=json.dumps(blob_data),
+                status_code=200,
+                mimetype="application/json"
+            )
+
+        # Download the blob content
+
+        return func.HttpResponse(
+            body=blob_data,
+            status_code=200,
+            mimetype="application/octet-stream"
+        )
+    except Exception as e:
+        logging.error(f"Error querying Blob Storage: {e}")
+        return func.HttpResponse(
+            body="Error querying Blob Storage",
+            status_code=500
+        )
+
+
 def executing_correct_func_app(req: func.HttpRequest, route: str):
     return os.getenv("ENVIRONMENT") == "AZURE" and  os.getenv("APP_NAME")!= route
 
