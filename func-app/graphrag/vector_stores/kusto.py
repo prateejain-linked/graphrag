@@ -472,13 +472,13 @@ class KustoVectorStore(BaseVectorStore):
             raise
     
     def get_matching_relationships(self, query: str, text_embedder: TextEmbedder, k: int = 10,
-                               entity_ids=[], depth=1,
+                               relationship_ids=[], depth=1,
                                **kwargs: Any
     ):
         # Get top text units using similarity search
         query_embedding = text_embedder(query)
 
-        if entity_ids==[]:
+        if relationship_ids==[]:
             cmd = f"""
                 let query_vector = dynamic({query_embedding});
                 {self.relationships_name}
@@ -489,7 +489,7 @@ class KustoVectorStore(BaseVectorStore):
             cmd = f"""
                 let query_vector = dynamic({query_embedding});
                 {self.relationships_name} | 
-                where id in ({entity_ids}) | 
+                where id in ({relationship_ids}) | 
                 | extend similarity = series_cosine_similarity(query_vector, text_unit_embedding)
                 | top {k} by similarity desc
                 """
@@ -621,27 +621,3 @@ class KustoVectorStore(BaseVectorStore):
             for row_index, row in df.iterrows()
         ]
     
-    def get_top_k_relationships_by_text_unit_similarity(self,all_edges_ids,top_k,query,text_embedder):
-        query_embedding = text_embedder.embed(query)
-        edges_ids_str=", ".join(f"'{id}'" for id in all_edges_ids )
-        kusto_query = f"""
-        let query_vector = dynamic({query_embedding});
-        {self.collection_name}
-        | where id in ({edges_ids_str})
-        | extend similarity = series_cosine_similarity(query_vector, {self.vector_name})
-        | top {top_k} by similarity desc
-        """
-        response = self.client.execute(self.database, kusto_query)
-        df = dataframe_from_result_table(response.primary_results[0])
-        return [
-            Relationship(
-                id=row['id'],
-                source=row['source'],
-                target=row['target'],
-                short_id=row_index,
-                source_id=row['source_id'],
-                target_id=row['target_id'],
-                text_unit_ids=row['text_unit_ids'],
-            )
-            for row_index, row in df.iterrows()
-        ]

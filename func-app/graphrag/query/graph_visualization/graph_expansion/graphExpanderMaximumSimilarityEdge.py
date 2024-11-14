@@ -31,7 +31,7 @@ class GraphExpanderMaximumSimilarityEdge(BaseGraphExpander):
             all_edges = self.get_all_edges_subtree(node,depth)
             all_edges_ids = [edge.id for edge in all_edges]
             ##Remove excluding_edges_ids
-            top_k_edges = self.kusto_client.get_top_k_relationships_by_text_unit_similarity(all_edges_ids,top_k,query,self.text_embedder)
+            top_k_edges = self.kusto_client.get_matching_relationships(relationship_ids=all_edges_ids,k=top_k,query=query,text_embedder=self.text_embedder)
             for top_k_edge in top_k_edges:
                 top_k_edge_source = top_k_edge.source_id
                 top_k_edge_target = top_k_edge.target_id
