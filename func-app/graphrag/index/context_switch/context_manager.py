@@ -21,7 +21,7 @@ class ContextManager:
         self._context_id = self.__generate_context_id(context_name)
         self._store = self.__intialize_store()
 
-    
+
     def __generate_context_id(self, content_name):
         keys = { "key" : content_name }
 
@@ -31,25 +31,25 @@ class ContextManager:
 
     def __intialize_store(self) -> BlobPipelineStorage:
         context_store_url = os.environ.get("CONTEXT_STORE_URL", default="https://inputdatasetsa.blob.core.windows.net")
-        context_store_contaier_name = os.environ.get("CONTEXT_STORE_CONTAINER_NAME", default="context")
+        context_store_contaier_name = os.environ.get("CONTEXT_STORE_CONTAINER_NAME", default="context2")
 
         return BlobPipelineStorage(connection_string=None, container_name=context_store_contaier_name, storage_account_blob_url= context_store_url)
-    
+
     def __generate_init_file_key(self) -> str:
         init_file_name = f"{self._context_id}/{self._context_id}_init.json"
         return init_file_name
-    
+
     def __generate_file_key(self, file_name:str) -> str:
         init_file_name = f"{self._context_id}/contents/{file_name}"
         return init_file_name
 
     def initialize(self, files: list[str]) -> bool:
         init_file_name = self.__generate_init_file_key()
-        
+
         result = self._store.check_if_exists(init_file_name)
         if result == True:
             return False
-        
+
         values: Dict[str, Any] = dict()
 
         values['context_name'] = self._context_name
@@ -62,7 +62,7 @@ class ContextManager:
         self._store.set_sync(key=init_file_name, value=value)
 
         return True
-    
+
     def __push_to_queue(self, files: list[str]):
         if len(files) <= 0:
             log.info(f"No files to push to the queue for {self._context_name}")
@@ -85,11 +85,11 @@ class ContextManager:
         else:
             values['state'] = 'hot'
             self.__push_to_queue(values['files'])
-        
+
         value = json.dumps(values)
 
         self._store.set_sync(key=init_file_name, value=value)
-    
+
     def update(self, files: list[str]):
         init_file_name = self.__generate_init_file_key()
 
@@ -104,13 +104,13 @@ class ContextManager:
         if len(new_files) <= 0:
             log.info(f"No updates are required for the context {self._context_name}")
             return
-        
+
         files = list(set(existing_files + new_files))
         values['files'] = files
 
         if values['state'] == 'hot':
             self.__push_to_queue(new_files)
-        
+
         value = json.dumps(values)
 
         self._store.set_sync(key=init_file_name, value=value)

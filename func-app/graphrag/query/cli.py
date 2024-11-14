@@ -174,12 +174,13 @@ def cs_search(
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
     path=0,
-    save_result=False
+    save_result=False,
+    override=None
     ):
 
     """Run a local search with the given query."""
     data_dir, root_dir, config = _configure_paths_and_settings(
-        data_dir, root_dir, config_dir
+        data_dir, root_dir, config_dir, override=override
     )
 
     vector_store_args = (
@@ -304,59 +305,6 @@ def cs_search(
 
     return raw_result
 
-
-
-def path1(
-    config_dir: str | None,
-    data_dir: str | None,
-    root_dir: str | None,
-    community_level: int,
-    response_type: str,
-    context_id: str,
-    query: str,
-    optimized_search: bool = False,
-    use_kusto_community_reports: bool = False,
-    ):
-    ValueError("Not implemented")
-
-def path2(
-    config_dir: str | None,
-    data_dir: str | None,
-    root_dir: str | None,
-    community_level: int,
-    response_type: str,
-    context_id: str,
-    query: str,
-    optimized_search: bool = False,
-    use_kusto_community_reports: bool = False,
-    ):
-    """Path 2
-    Find all the emails sent to trader by Tim Belden
-    a. Query -> LLM -> Entity Extracted -> 5 entities -> Set A [TimBelden1]
-    b. Query -> LLM -> Embeddings -> Y [x1..... Xn]
-    c. Run the query on Kusto for embedding Y [x1.....xn] for entitYid in [TimBelden1]
-    4. Get the text units and get the response"""
-    data_dir, root_dir, config = _configure_paths_and_settings(
-        data_dir, root_dir, config_dir
-    )
-
-
-    exit(0)
-
-def path3(
-    config_dir: str | None,
-    data_dir: str | None,
-    root_dir: str | None,
-    community_level: int,
-    response_type: str,
-    context_id: str,
-    query: str,
-    optimized_search: bool = False,
-    use_kusto_community_reports: bool = False,
-    ):
-    ValueError("Not implemented")
-
-
 def run_local_search(
     config_dir: str | None,
     data_dir: str | None,
@@ -368,11 +316,12 @@ def run_local_search(
     optimized_search: bool = False,
     use_kusto_community_reports: bool = False,
     path = 0,
-    save_result=False):
+    save_result=False,
+    override=None):
     """Run a local search with the given query."""
 
     return cs_search(config_dir, data_dir, root_dir, community_level, response_type, context_id,
-                     query, optimized_search, use_kusto_community_reports, path=path,save_result=save_result)
+                     query, optimized_search, use_kusto_community_reports, path=path,save_result=save_result, override=override)
 
 def blob_exists(container_client, blob_name):
     blob_client = container_client.get_blob_client(blob_name)
@@ -396,13 +345,14 @@ def _configure_paths_and_settings(
     data_dir: str | None,
     root_dir: str | None,
     config_dir: str | None,
+    override: str | None,
 ) -> tuple[str, str | None, GraphRagConfig]:
     if data_dir is None and root_dir is None:
         msg = "Either data_dir or root_dir must be provided."
         raise ValueError(msg)
     if data_dir is None:
         data_dir = _infer_data_dir(cast(str, root_dir))
-    config = _create_graphrag_config(root_dir, config_dir)
+    config = _read_config_parameters(root_dir or "./", config_dir, override=override)
     return data_dir, root_dir, config
 
 
@@ -417,16 +367,7 @@ def _infer_data_dir(root: str) -> str:
     msg = f"Could not infer data directory from root={root}"
     raise ValueError(msg)
 
-
-def _create_graphrag_config(
-    root: str | None,
-    config_dir: str | None,
-) -> GraphRagConfig:
-    """Create a GraphRag configuration."""
-    return _read_config_parameters(root or "./", config_dir)
-
-
-def _read_config_parameters(root: str, config: str | None):
+def _read_config_parameters(root: str, config: str | None, override: str | None = None):
     _root = Path(root)
     settings_yaml = (
         Path(config)
@@ -444,6 +385,18 @@ def _read_config_parameters(root: str, config: str | None):
             import yaml
 
             data = yaml.safe_load(file.read().decode(encoding="utf-8", errors="strict"))
+            if override:
+                # If override is provided, update data reading in an additional file
+                # The override file is in the form of path to config removing the file from the path and instead adding the file config-directory/settings<override>.yaml
+                override_yaml = Path(_root) / f"settings{override}.yaml"
+                if override_yaml.exists():
+                    with override_yaml.open(
+                        "rb",
+                    ) as file:
+                        override_data = yaml.safe_load(
+                            file.read().decode(encoding="utf-8", errors="strict")
+                        )
+                        data = inplace_update(data, override_data)
             return create_graphrag_config(data, root)
 
     settings_json = (
@@ -462,13 +415,21 @@ def _read_config_parameters(root: str, config: str | None):
     reporter.info("Reading settings from environment variables")
     return create_graphrag_config(root_dir=root)
 
+def inplace_update(base, updates):
+    for key, value in updates.items():
+        if isinstance(value, dict) and key in base:
+            base[key] = inplace_update(base[key], value)
+        else:
+            base[key] = value
+    return base
 
 def summarize(query_id:str,
               root_dir,
               response_type="multiple paragraphs",
-              community_level=2)->str:
+              community_level=2,
+              override=None)->str:
     data_dir, root_dir, config = _configure_paths_and_settings(
-        '', root_dir, None
+        '', root_dir, None, override=override
     )
     blob_storage_client: PipelineStorage = BlobPipelineStorage(connection_string=None,
                                                                 container_name=config.output_storage.container_name,
@@ -585,10 +546,10 @@ def split_raw_response(data):
 
     return query,raw_json
 
-def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20):
+def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20, override=None):
 
     _, root_dir, config = _configure_paths_and_settings(
-        '', root_dir, None
+        '', root_dir, None, override=override
     )
     rrf_scores = {}
     docs={}
@@ -680,9 +641,9 @@ def generate_graph(context_id,query,root_dir='settings'):
     graphml = "".join(nx.generate_graphml(graph,named_key_ids=True))
     return graphml
 
-def expand_node_graph(node,context_id,query,depth,root_dir='settings',excluding_edges_ids=[]):
+def expand_node_graph(node,context_id,query,depth,root_dir='settings', override=None, excluding_edges_ids=[]):
     data_dir, root_dir, config = _configure_paths_and_settings(
-        '', root_dir, None
+        '', root_dir, None, override=override
     )
     text_embedder=get_text_embedder(config)
     vector_store_args = (
