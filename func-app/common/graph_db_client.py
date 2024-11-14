@@ -121,7 +121,7 @@ class GraphDBClient:
                         ".property('category', prop_partition_key)"
                         ".property(list,'description_embedding',prop_description_embedding)"
                         ".property(list,'graph_embedding',prop_graph_embedding)"
-                        ".property(list,'text_unit_ids',prop_text_unit_ids)"
+                        ".property(list,'text_unit_ids',prop_text_unit_ids))"
                     )
                     bindings={
                         "prop_id": row.id,
@@ -136,7 +136,6 @@ class GraphDBClient:
                     }
                 rs = self._client.submit(message=message, bindings=bindings)
                 self.running_jobs.add(rs)
-
 
     def write_edges(self,data: pd.DataFrame)->None:
         pt_enabled = os.environ.get("PROTOTYPE")
@@ -232,11 +231,11 @@ class GraphDBClient:
                 .unfold()
                 .select(values)
                 .unfold()
-                .order().by(select('rank'), decr)
+                .order().by(select('weight'), decr)
                 .dedup('source_id','target_id')
                 .limit({top})
                 """
-        )
+            )
         result = self._client.submit(
             message=m,
         )
@@ -244,6 +243,7 @@ class GraphDBClient:
         json_data = []
         for rows in result:
             for row in rows:
+                id = row['id']
                 source_id = row['source_id']
                 target_id = row['target_id']
                 weight = row['weight']
@@ -259,8 +259,6 @@ class GraphDBClient:
 
         #####################################################################
 
-        return json_data
-
     def wait_for_jobs(self):
         """Wait for all running jobs to complete."""
         try:
@@ -270,7 +268,7 @@ class GraphDBClient:
         except Exception as e:
             print(f"Error writing to graph: {e}")
             raise e
-
+    
     def get_all_edges_within_depth(self,node,depth):
         if depth==1:
             graph_query=(
