@@ -167,7 +167,7 @@ class GraphDBClient:
         """
         result = self._client.submit(
             message=(
-                f"""g.V().has('id', '{entity_id}')
+                f"""g.V().has('rank').has('id', '{entity_id}')
                   .bothE('connects')
                   .project('source_id', 'target_id', 'rank','text_unit_ids')
                     .by(outV().values('id'))

@@ -1,3 +1,6 @@
+# Copyright (c) 2024 Microsoft Corporation.
+# Licensed under the MIT License
+
 import ast
 from .base import BaseGraphExpander
 from graphrag.model import Relationship
@@ -13,10 +16,12 @@ class GraphExpanderMaximumSimilarityEdge(BaseGraphExpander):
             for top_k_path_edge in top_k_paths_edges:
                 top_k_path_edge_source = top_k_path_edge[0]
                 top_k_path_edge_target = top_k_path_edge[1]
+                top_k_path_edge_source_name = top_k_path_edge[3]
+                top_k_path_edge_target_name = top_k_path_edge[4]
                 if not graph.has_node(top_k_path_edge_source):
-                    graph.add_node(top_k_path_edge_source)
+                    graph.add_node(top_k_path_edge_source,name=top_k_path_edge_source_name)
                 if not graph.has_node(top_k_path_edge_target):
-                    graph.add_node(top_k_path_edge_target)
+                    graph.add_node(top_k_path_edge_target,name=top_k_path_edge_target_name)
                 graph.add_edge(
                     top_k_path_edge_source,
                     top_k_path_edge_target,
@@ -31,29 +36,34 @@ class GraphExpanderMaximumSimilarityEdge(BaseGraphExpander):
                 top_k_edge_source = top_k_edge.source_id
                 top_k_edge_target = top_k_edge.target_id
                 if not graph.has_node(top_k_edge_source):
-                    graph.add_node(top_k_edge_source)
+                    graph.add_node(top_k_edge_source,name=top_k_edge.source)
                 if not graph.has_node(top_k_edge_target):
-                    graph.add_node(top_k_edge_target)
+                    graph.add_node(top_k_edge_target,name=top_k_edge.target)
                 graph.add_edge(
                     top_k_edge_source,
                     top_k_edge_target,
                     text_unit = top_k_edge.text_unit_ids[0],
                 )
-        graphml = "".join(nx.generate_graphml(graph))
-        return graphml.replace("<graphml",f"<graphml initial_node={node}")
+        graphml = "".join(nx.generate_graphml(graph,named_key_ids=True))
+        #return graphml.replace("<graphml",f"<graphml initial_node={node}")
+        return graphml
             
 
     def build_paths_from_edges(self,top_k_edges,parents_dictionary,node):
         top_k_paths_edges=[]
         for top_k_edge in top_k_edges:
             parent=top_k_edge.source_id
+            parent_name=top_k_edge.source
             current_target = top_k_edge.target_id
+            current_name = top_k_edge.target
             text_unit = ast.literal_eval(top_k_edge.text_unit_ids)
-            top_k_paths_edges.append((parent,current_target,text_unit))
-            while parent!=node:
-                top_k_paths_edges.append((parent,current_target,text_unit))#replace this with relationship object
+            while current_target!=node:
+                top_k_paths_edges.append((parent,current_target,text_unit,parent_name,current_name))#replace this with relationship object
+                if parent==node:
+                    break
                 current_target = parent
-                parent,text_unit = parents_dictionary[parent]
+                current_name = parent_name
+                parent,text_unit,parent_name = parents_dictionary[parent]
         return top_k_paths_edges
 
     def get_relevant_edges(self,current_vertices,visited_vertices,depth,top_k,query,excluding_edges_ids):
@@ -66,10 +76,13 @@ class GraphExpanderMaximumSimilarityEdge(BaseGraphExpander):
         for expanding_edge in expanding_edges:
             if expanding_edge.target_id not in expanding_vertices:
                 expanding_vertices.add(expanding_edge.target_id)
-                parents_dictionary[expanding_edge.target_id]={expanding_edge.source_id,expanding_edge.text_unit_ids[0]}
+                parents_dictionary[expanding_edge.target_id]=(expanding_edge.source_id,expanding_edge.text_unit_ids[0],expanding_edge.source)
             else:
                 backtracking_edges.append(expanding_edge)
-        visited_vertices = visited_vertices.append(current_vertices)
+        for current_vertex in current_vertices:
+            visited_vertices.append(current_vertex)
+        if len(expanding_vertices) == 0:
+            return (expanding_edges,backtracking_edges,parents_dictionary)
         subtree_edges,subtree_backtrack_edges,subtree_parents_dictionary = self.get_relevant_edges(expanding_vertices,visited_vertices,depth-1,top_k,query,excluding_edges_ids)
         tree_edges = self.merge_edges_lists(subtree_edges,expanding_edges,top_k)
         tree_backtrack_edges = self.merge_edges_lists(subtree_backtrack_edges,backtracking_edges,top_k)
