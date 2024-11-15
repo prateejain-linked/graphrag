@@ -605,7 +605,7 @@ def rrf_scoring(query_ids:str,root_dir:str,k=60,top_k=20, override=None):
 
 def generate_graph(context_id,query,root_dir='settings'):
     data_dir, root_dir, config = _configure_paths_and_settings(
-        '', root_dir, None
+        '', root_dir, None, override=None
     )
     text_embedder=get_text_embedder(config)
     vector_store_args = (
@@ -629,6 +629,10 @@ def generate_graph(context_id,query,root_dir='settings'):
     kusto_client.connect(**vector_store_args)
     matching_relationships = kusto_client.get_matching_relationships(query=query,text_embedder=text_embedder.embed)
     graph = nx.Graph()
+    graph.add_node("0",name="<G>")
+    sources = set()
+    for matching_relationship in matching_relationships:
+        sources.add(matching_relationship.source_id)
     for matching_relationship in matching_relationships:
         if not graph.has_node(matching_relationship.source_id):
             graph.add_node(matching_relationship.source_id,name=matching_relationship.source)
@@ -638,6 +642,14 @@ def generate_graph(context_id,query,root_dir='settings'):
             matching_relationship.source_id,
             matching_relationship.target_id,
             text_unit = matching_relationship.text_unit_ids[0],
+            description = "Relevant edge",
+        )
+    for source_id in sources:
+        graph.add_edge(
+            "0",
+            source_id,
+            text_unit = "0",
+            description="Not an edge"
         )
     graphml = "".join(nx.generate_graphml(graph,named_key_ids=True))
     return graphml

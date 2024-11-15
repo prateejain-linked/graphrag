@@ -26,6 +26,7 @@ class GraphExpanderMaximumSimilarityEdge(BaseGraphExpander):
                     top_k_path_edge_source,
                     top_k_path_edge_target,
                     text_unit = top_k_path_edge[2][0],
+                    description = "Edge from expansion"
                 )
         else:
             all_edges = self.get_all_edges_subtree(node,depth)
@@ -43,9 +44,10 @@ class GraphExpanderMaximumSimilarityEdge(BaseGraphExpander):
                     top_k_edge_source,
                     top_k_edge_target,
                     text_unit = top_k_edge.text_unit_ids[0],
+                    description = "Edge from expansion"
                 )
+        graph.graph['initial_node'] = node
         graphml = "".join(nx.generate_graphml(graph,named_key_ids=True))
-        #return graphml.replace("<graphml",f"<graphml initial_node={node}")
         return graphml
             
 
