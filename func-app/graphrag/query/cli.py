@@ -684,9 +684,9 @@ def expand_node_graph(node,context_id,query,depth,root_dir='settings', override=
     graph_expander = GraphExpanderMaximumSimilarityEdge(kusto_client,graphdb_client,text_embedder)
     return graph_expander.expand_node(node=node,depth=depth,top_k=2,query=query,excluding_edges_ids=excluding_edges_ids,use_kusto=True)
 
-def alert_search(root_dir,context_id, query,with_keywords=False,expand=False):
+def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,override=None):
     _, _, config = _configure_paths_and_settings(
-        data_dir='', root_dir=root_dir,config_dir=None,override=None
+        data_dir='', root_dir=root_dir,config_dir=None,override=override
     )
 
     vector_store_args = (

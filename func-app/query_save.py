@@ -144,6 +144,7 @@ def alerts(req: func.HttpRequest) -> func.HttpResponse:
     context_id = req.params['context_id']
     query = req.params['query']
     expand=req.params.get('target',None)
+    override=req.params.get('cube_id',None)
     with_keywords=False
 
     if not expand:
@@ -155,7 +156,8 @@ def alerts(req: func.HttpRequest) -> func.HttpResponse:
                             context_id=context_id,
                             query=query,
                             with_keywords=with_keywords,
-                            expand=expand)
+                            expand=expand,
+                            override=override)
     return func.HttpResponse(
         str(output),
         status_code=200
