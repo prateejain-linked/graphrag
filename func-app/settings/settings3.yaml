@@ -1,0 +1,91 @@
+
+encoding_model: cl100k_base
+skip_workflows: []
+llm:
+  type: azure_openai_chat # openai_chat # or azure_openai_chat
+  model_supports_json: true # recommended if this is available for your model.
+  # max_tokens: 4000
+  # request_timeout: 180.0
+  model: gpt-4o
+  api_base: https://contentstore-oai.openai.azure.com/
+  api_version: 2024-02-15-preview
+  # organization: <organization_id>
+  deployment_name: gpt-4o
+
+
+  
+
+parallelization:
+  stagger: 0.3
+  # num_threads: 50 # the number of threads to use for parallel processing
+
+async_mode: threaded # or asyncio
+
+embeddings:
+  ## parallelization: override the global parallelization settings for embeddings
+  async_mode: threaded # or asyncio
+  llm:
+    type: azure_openai_embedding #openai_embedding # or azure_openai_embedding
+    model: text-embedding-3-small
+    api_base: https://contentstore-oai.openai.azure.com/
+    api_version: 2024-02-15-preview
+    # organization: <organization_id>
+    deployment_name: text-embedding-3-small
+
+  
+  vector_store:
+    type: kusto #lancedb 
+    cluster: https://contentstorekustotest.eastus.kusto.windows.net
+    database: testdb2
+    store_in_table: 1
+    index_in_memory: 1
+    #cluster: https://kvc-p8m9q7d8mefjc7mqje.southcentralus.kusto.windows.net/
+
+
+entity_extraction:
+  prompt: "prompts/alertinfo_kusto.txt" # "prompts/emails.txt"
+  entity_types: [userkey,email,sensitivedata,operation,file,alertid,policyid,managedruleid] 
+  max_gleanings: 1
+
+summarize_descriptions:
+  ## llm: override the global llm settings for this task
+  ## parallelization: override the global parallelization settings for this task
+  ## async_mode: override the global async_mode settings for this task
+  prompt: "prompts/summarize_descriptions.txt"
+  max_length: 500
+
+claim_extraction:
+  ## llm: override the global llm settings for this task
+  ## parallelization: override the global parallelization settings for this task
+  ## async_mode: override the global async_mode settings for this task
+  # enabled: true
+  prompt: "prompts/claim_extraction.txt"
+  description: "Any claims or facts that could be relevant to information discovery."
+  max_gleanings: 1
+
+community_reports:
+  ## llm: override the global llm settings for this task
+  ## parallelization: override the global parallelization settings for this task
+  ## async_mode: override the global async_mode settings for this task
+  prompt: "prompts/community_report.txt"
+  max_length: 2000
+  max_input_length: 8000
+
+cluster_graph:
+  max_cluster_size: 10
+
+embed_graph:
+  enabled: true # if true, will generate node2vec embeddings for nodes
+  # num_walks: 10
+  # walk_length: 40
+  # window_size: 2
+  # iterations: 3
+  # random_seed: 597832
+
+umap:
+  enabled: false # if true, will generate UMAP embeddings for nodes
+
+snapshots:
+  graphml: false
+  raw_entities: false
+  top_level_nodes: false
