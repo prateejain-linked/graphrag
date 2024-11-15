@@ -10,7 +10,7 @@ from typing import Any
 from graphrag.model.community_report import CommunityReport
 from graphrag.model.entity import Entity
 from graphrag.model.types import TextEmbedder
-from graphrag.model import TextUnit,Relationship
+from graphrag.model import TextUnit
 
 DEFAULT_VECTOR_SIZE: int = 1536
 
@@ -49,8 +49,9 @@ class BaseVectorStore(ABC):
         vector_name: str,
         reports_name: str,
         text_units_name: str,
-        relationships_name: str,
         docs_tbl_name:str,
+        relationships_name :str,
+        relationships_AUDIT_name: str,
         db_connection: Any | None = None,
         document_collection: Any | None = None,
         query_filter: Any | None = None,
@@ -61,6 +62,7 @@ class BaseVectorStore(ABC):
         self.reports_name = reports_name
         self.text_units_name = text_units_name
         self.relationships_name = relationships_name
+        self.relationships_AUDIT_name = relationships_AUDIT_name
         self.docs_tbl_name=docs_tbl_name
         self.db_connection = db_connection
         self.document_collection = document_collection
@@ -132,7 +134,3 @@ class BaseVectorStore(ABC):
     @abstractmethod
     def unload_entities(self) -> None:
         """Remove context from the databases."""
-    
-    @abstractmethod
-    def load_relationships(self, rels: list[Relationship], overwrite: bool = False):
-        """Create relationships in kusto"""

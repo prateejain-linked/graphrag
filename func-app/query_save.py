@@ -7,7 +7,7 @@ import codecs
 from graphrag.index.cli import index_cli
 import os
 
-from graphrag.query.cli import run_local_search, summarize,rrf_scoring,expand_node_graph,generate_graph
+from graphrag.query.cli import run_local_search, summarize,rrf_scoring,expand_node_graph,generate_graph, alert_search
 from time import sleep
 
 query_functions = func.Blueprint()
@@ -132,6 +132,30 @@ def query_expansion(req: func.HttpRequest) -> func.HttpResponse:
     depth = int(req.params['depth'])
     excluding_edges_ids = req.params['excluding_edges_ids']
     output = expand_node_graph(node,context_id,query,depth,excluding_edges_ids=excluding_edges_ids)
+    return func.HttpResponse(
+        str(output),
+        status_code=200
+    )
+
+@query_functions.function_name('alerts')
+@query_functions.route(route="alerts", auth_level=func.AuthLevel.FUNCTION)
+def alerts(req: func.HttpRequest) -> func.HttpResponse:
+
+    context_id = req.params['context_id']
+    query = req.params['query']
+    expand=req.params.get('target',None)
+    with_keywords=False
+
+    if not expand:
+        wk = req.params.get('kw',None)
+        if wk:
+            with_keywords=True
+    
+    output = alert_search(root_dir = "settings",
+                            context_id=context_id,
+                            query=query,
+                            with_keywords=with_keywords,
+                            expand=expand)
     return func.HttpResponse(
         str(output),
         status_code=200
