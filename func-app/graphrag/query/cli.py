@@ -623,6 +623,7 @@ def generate_graph(context_id,query,root_dir='settings'):
     vector_store_args.update({"text_units_name": f"text_units_{context_id}"})
     vector_store_args.update({"docs_tbl_name": f"docs_{context_id}"})
     vector_store_args.update({"relationships_name": f"relationships_{context_id}"})
+    vector_store_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{context_id}"})
     kusto_client = VectorStoreFactory.get_vector_store(
         vector_store_type="kusto", kwargs=vector_store_args,
     )
@@ -674,6 +675,7 @@ def expand_node_graph(node,context_id,query,depth,root_dir='settings', override=
     vector_store_args.update({"text_units_name": f"text_units_{context_id}"})
     vector_store_args.update({"docs_tbl_name": f"docs_{context_id}"})
     vector_store_args.update({"relationships_name": f"relationships_{context_id}"})
+    vector_store_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{context_id}"})
     kusto_client = VectorStoreFactory.get_vector_store(
         vector_store_type="kusto", kwargs=vector_store_args,
     )
