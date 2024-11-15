@@ -804,7 +804,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False):
         add_node(added_nodes,gr,source,color)
         add_node(added_nodes,gr,target,color)
 
-        gr.add_edge(source, target, _desc=r.text_unit)
+        gr.add_edge(source, target, _desc=r.description)
         gr.add_edge("<G>",source)
 
     
