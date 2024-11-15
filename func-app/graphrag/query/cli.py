@@ -50,7 +50,7 @@ from common.graph_db_client import GraphDBClient
 import json
 import ast
 import uuid
-
+from random import randint
 import networkx as nx
 
 reporter = PrintProgressReporter("")
@@ -79,6 +79,7 @@ def __get_embedding_description_store(
     config_args.update({"text_units_name": f"text_units_{context_id}"})
     config_args.update({"docs_tbl_name": f"docs_{context_id}"})
     config_args.update({"relationships_name": f"relationships_{context_id}"})
+    config_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{context_id}"})
 
     description_embedding_store = VectorStoreFactory.get_vector_store(
         vector_store_type=vector_store_type, kwargs=config_args
@@ -668,3 +669,145 @@ def expand_node_graph(node,context_id,query,depth,root_dir='settings', override=
     graphdb_client = GraphDBClient(config.graphdb,context_id=context_id)
     graph_expander = GraphExpanderMaximumSimilarityEdge(kusto_client,graphdb_client,text_embedder)
     return graph_expander.expand_node(node=node,depth=depth,top_k=2,query=query,excluding_edges_ids=excluding_edges_ids,use_kusto=True)
+
+def alert_search(root_dir,context_id, query,with_keywords=False,expand=False):
+    _, _, config = _configure_paths_and_settings(
+        data_dir='', root_dir=root_dir,config_dir=None,override=None
+    )
+
+    vector_store_args = (
+        config.embeddings.vector_store if config.embeddings.vector_store else {}
+    )
+
+    reporter.info(f"Vector Store Args: {vector_store_args}")
+    vector_store_type = vector_store_args.get("type")
+
+    kusto_client = __get_embedding_description_store(
+            entities=[],
+            vector_store_type=vector_store_type,
+            config_args=vector_store_args,
+            context_id=context_id,
+        )
+    
+    text_embedder = get_text_embedder(config)
+
+    ####################################################
+
+    if expand: #expansion requested
+        rels= kusto_client.extract_audit_relationships(
+                query=query,
+                text_embedder=lambda t: text_embedder.embed(t),
+                k=10,
+                keywords= [],
+                expand=expand
+            )
+    else:
+        args = {}
+        args['type'] = config.llm.type
+        args['model'] = config.llm.model
+        args['model_supports_json'] = config.llm.model_supports_json
+        args['api_base'] = config.llm.api_base
+        args['api_version'] = config.llm.api_version
+        args['deployment_name'] = config.llm.deployment_name          
+
+        llm_conf = {}
+        llm_conf['llm'] = args
+
+        single_try=True
+
+        if single_try:
+            llm_conf['max_gleanings'] = 0 
+
+        q_entities = asyncio.run(run_gi(
+            docs=[Document(text=query, id=str(randint(1,1000)))],
+            entity_types=config.entity_extraction.entity_types,
+            reporter = None,
+            pipeline_cache=None,
+            args=llm_conf,
+        ))
+
+        q_entities=q_entities.entities
+        
+        if len(q_entities)==0:
+            print("[!] Query entitiy extraction failed. Check your query.")
+
+        print("[>] Q E:",q_entities)
+
+        keepers=['.','_','-','/',':','\\']
+        excluders=[
+            'sensitive data',
+            'user',
+            'file',
+            'document'
+        ]
+        spare=[]
+        keywords=[]
+        for i in range(len(q_entities)):
+            keep=0
+            tmp=q_entities[i]['name'].lower()
+            
+            for k in keepers:
+                if k in tmp:
+                    keep=1
+            if not keep:
+                if tmp in excluders: # or (" " in tmp and tmp != q_entities[i]['type'].lower()):
+                    print(f"ignoring <{tmp}>")
+                    spare.append(tmp)
+                    continue 
+
+                if tmp[-1]=='s': 
+                    print(f"Changing <{tmp}>")
+                    if tmp[:-1] in excluders:
+                        continue
+
+            keywords.append(tmp)
+        
+        if len(keywords)==0 :
+            keywords=spare
+
+        USE_KEYWORDS=True if with_keywords else False
+
+        print("Keywords:",keywords)
+        rels= kusto_client.extract_audit_relationships(
+                    query=query,
+                    text_embedder=lambda t: text_embedder.embed(t),
+                    k=10,
+                    keywords= keywords if USE_KEYWORDS else [],
+                    expand=None
+                )
+    #####################################################################
+
+    print(f"targeting {len(rels)} rows")
+
+    added_nodes={}
+    gr = nx.Graph()
+    gr.add_node('<G>')
+    colors=['grey']
+    def add_node(dc,g,node:str,color):
+        if node in dc: return 
+        dc[node]=1
+        g.add_node(node)
+        colors.append(color)
+
+    s=""
+    for r in rels:
+        source=r.source
+        target=r.target
+        s += f"{source} -> {target} : {r.description}\n\n"
+
+        color='blue'
+        if not expand: 
+            for e in keywords:
+                if e in (source.lower(),target.lower()) or e in r.description.lower():
+                    color='red'
+
+        add_node(added_nodes,gr,source,color)
+        add_node(added_nodes,gr,target,color)
+
+        gr.add_edge(source, target, _desc=r.text_unit)
+        gr.add_edge("<G>",source)
+
+    
+    r=nx.generate_graphml(gr)
+    r="\n".join(r)
+    return r

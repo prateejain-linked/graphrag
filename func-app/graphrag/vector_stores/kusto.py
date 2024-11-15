@@ -621,3 +621,64 @@ class KustoVectorStore(BaseVectorStore):
             for row_index, row in df.iterrows()
         ]
     
+    def extract_audit_relationships(self, query: str, text_embedder: TextEmbedder, k: int = 10,
+                               keywords=[], expand=None, depth=1,
+                               **kwargs: Any
+    ):
+        query_embedding = text_embedder(query)
+
+        if expand:
+            cmd = f"""
+                let query_vector = dynamic({query_embedding});
+                {self.relationships_AUDIT_name}  
+                | where source=='{expand}' or target=='{expand}'  
+                | extend similarity = series_cosine_similarity(query_vector, description_embedding)
+                | top {k} by similarity desc
+                """
+        elif keywords==[]:
+            cmd = f"""
+                let query_vector = dynamic({query_embedding});
+                {self.relationships_AUDIT_name}
+                | extend similarity = series_cosine_similarity(query_vector, description_embedding)
+                | top {k} by similarity desc
+                """
+        else:
+            t="("
+            for kw in keywords:
+                kw =kw.replace('\\','\\\\')
+                t+=f"'{kw}',"
+            t=t[:-1]+")"
+            
+            cmd = f"""
+                let query_vector = dynamic({query_embedding});
+                {self.relationships_AUDIT_name}  
+                | where description has_any {t}  
+                | extend similarity = series_cosine_similarity(query_vector, description_embedding)
+                | top {k} by similarity desc
+                """
+            
+        response = self.exe(cmd)
+        df = dataframe_from_result_table(response.primary_results[0])
+   
+        rels=[]
+        for _,row in df.iterrows():
+            txt_unit_l = row['text_unit_ids']
+            if txt_unit_l == '' or txt_unit_l==None :
+                print( "Unexpected relationship: missing text unit" )
+                exit(-1)
+            txt_unit_l = ast.literal_eval(txt_unit_l)
+
+            r=Relationship(
+                source=row['source'],
+                target=row['target'],
+                id=row['id'],
+                short_id="0",
+                source_id=row['source_id'],
+                target_id=row['target_id'],
+                weight=row['weight'],
+                text_unit_ids=txt_unit_l, 
+                description=row['description']
+            )
+            rels.append(r)
+        
+        return rels
