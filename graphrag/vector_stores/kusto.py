@@ -272,6 +272,20 @@ class KustoVectorStore(BaseVectorStore):
         command = f".create table {self.text_units_name} (id: string, text: string, n_tokens: string, document_ids: string, entity_ids: string, relationship_ids: string)"
         self.client.execute(self.database, command)
 
+    def setup_docs(self) -> None: #Called by indexer
+        command = f".drop table {self.docs_tbl_name} ifexists"
+        self.client.execute(self.database, command)
+        
+        command = f".create table {self.docs_tbl_name} (id: string, in_path:string, \
+            out_path: string)"
+
+        self.client.execute(command)
+
+    def load_doc_stats(self, rows) -> None: #called by indexer
+        df = pd.DataFrame(rows)
+        
+        ingestion_command = f".ingest inline into table {self.docs_tbl_name} <| {df.to_csv(index=False, header=False)}"
+        self.client.execute(self.database, ingestion_command)
 
     def load_text_units(self, units: list[TextUnit], overwrite: bool = False) -> None:
         df = pd.DataFrame(units)

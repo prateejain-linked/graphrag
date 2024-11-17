@@ -11,7 +11,9 @@ import sys
 import time
 import warnings
 from pathlib import Path
+import os
 
+from typing import cast
 from graphrag.config import (
     GraphRagConfig,
     create_graphrag_config,
@@ -34,6 +36,11 @@ from .graph.extractors.community_reports.prompts import COMMUNITY_REPORT_PROMPT
 from .graph.extractors.graph.prompts import GRAPH_EXTRACTION_PROMPT
 from .graph.extractors.summarize.prompts import SUMMARIZE_PROMPT
 from .init_content import INIT_DOTENV, INIT_YAML
+
+from graphrag.vector_stores.typing import VectorStoreFactory
+from dataclasses import dataclass
+from hashlib import sha256
+from graphrag.query.cli import _create_graphrag_config
 
 # Ignore warnings from numba
 warnings.filterwarnings("ignore", message=".*NumbaDeprecationWarning.*")
@@ -70,6 +77,68 @@ def redact(input: dict) -> str:
     return json.dumps(redacted_dict, indent=4)
 
 
+
+@dataclass
+class DocStat:
+    id: str
+    in_path: str
+    out_path: str
+
+
+def load_doc_stats(in_base:str,out_base:str,folders,context_id,config_args):
+    in_fname='email.txt' #obviously should change later
+    if not config_args:
+            config_args = {}
+
+    collection_name = ''
+    config_args.update({"collection_name": collection_name})
+    config_args.update({"vector_name": ''})
+    config_args.update({"reports_name": ''})
+    config_args.update({"text_units_name":''})
+    config_args.update({"docs_tbl_name": f"docs_{context_id}"})
+
+    kusto= VectorStoreFactory.get_vector_store(
+        vector_store_type='kusto', kwargs=config_args
+    )
+
+    kusto.connect(**config_args)
+    kusto.setup_docs()
+
+    def get_file_hash(path):
+        '''
+            NOTE: Openning the file in text instead of bytes mode might result in 
+            wrong hashes. But since graphrag does this, I'll keep it this way here as well 
+            for conssitency and to get the same hashes here and in text.py.
+            usedforsecurity param is also not necessary.
+        '''
+
+        f=open(path,"r",encoding='utf-8')
+        c=f.read()
+        r=sha256(c.encode(),usedforsecurity=False).hexdigest()
+        f.close()
+        return r
+
+
+    doc_stats=[]
+
+    store_fake_path=True # set to false to store actual filesystem path in kusto
+    for p_id in range(len(folders)):
+        in_p=f"{in_base}\\{p_id}\\{in_fname}"
+        out_p=f"{out_base}\\{p_id}"
+
+        hash=get_file_hash(in_p)
+
+        if store_fake_path:
+            in_p="INPUT_PATH"
+            out_p="OUTPUT_PATH"
+
+        doc_stats.append( DocStat(id=hash , in_path=in_p, out_path=out_p) )
+
+    kusto.load_doc_stats(doc_stats)
+
+    logging.info("Documents stats loaded in kusto.")
+    
+
 def index_cli(
     root: str,
     init: bool,
@@ -80,7 +149,6 @@ def index_cli(
     resume: str | None,
     memprofile: bool,
     nocache: bool,
-    reporter: str | None,
     config: str | None,
     emit: str | None,
     dryrun: bool,
@@ -88,14 +156,17 @@ def index_cli(
     cli: bool = False,
     use_kusto_community_reports: bool = False,
     optimized_search: bool = False,
+ 
 ):
     """Run the pipeline with the given config."""
+    logging.info("** IN CLI \n\n")
+    logging.info("Platform: "+sys.platform)
+    #root = Path(__file__).parent.parent.parent.__str__()
     run_id = resume or time.strftime("%Y%m%d-%H%M%S")
     _enable_logging(root, run_id, verbose)
-    progress_reporter = _get_progress_reporter(reporter)
-    if init:
+    progress_reporter = _get_progress_reporter("none")
+    if init: 
         _initialize_project_at(root, progress_reporter)
-        sys.exit(0)
     if overlay_defaults:
         pipeline_config: str | PipelineConfig = _create_default_config(
             root, config, verbose, dryrun or False, progress_reporter
@@ -104,25 +175,6 @@ def index_cli(
         pipeline_config: str | PipelineConfig = config or _create_default_config(
             root, None, verbose, dryrun or False, progress_reporter
         )
-    if context_id:
-        if not is_valid_guid(context_id):
-            ValueError("ContextId is invalid: It should be a valid Guid")
-        if (context_operation != ContextSwitchType.Activate and context_operation != ContextSwitchType.Deactivate):
-            ValueError("ContextOperation is invalid: It should be Active or DeActive")
-        _switch_context(
-            root=root,
-            config=config,
-            reporter=progress_reporter,
-            context_operation=context_operation,
-            context_id=context_id,
-            community_level=community_level,
-            optimized_search=optimized_search,
-            use_kusto_community_reports=use_kusto_community_reports,
-        )
-        sys.exit(0)
-    cache = NoopPipelineCache() if nocache else None
-    pipeline_emit = emit.split(",") if emit else None
-    encountered_errors = False
 
     def _run_workflow_async() -> None:
         import signal
@@ -136,7 +188,7 @@ def index_cli(
             progress_reporter.info("All tasks cancelled. Exiting...")
 
         # Register signal handlers for SIGINT and SIGHUP
-        signal.signal(signal.SIGINT, handle_signal)
+        #signal.signal(signal.SIGINT, handle_signal)
 
         if sys.platform != "win32":
             signal.signal(signal.SIGHUP, handle_signal)
@@ -182,17 +234,95 @@ def index_cli(
             uvloop.install()
             asyncio.run(execute())
 
-    _run_workflow_async()
-    progress_reporter.stop()
-    if encountered_errors:
-        progress_reporter.error(
-            "Errors occurred during the pipeline run, see logs for more details."
-        )
-    else:
-        progress_reporter.success("All workflows completed successfully.")
+    ################ CONTEXT SWITCHING
+    if context_id:
+        #if not is_valid_guid(context_id):
+         #   ValueError("ContextId is invalid: It should be a valid Guid")
+        if (context_operation != ContextSwitchType.Activate and context_operation != ContextSwitchType.Deactivate):
+            raise ValueError("ContextOperation is invalid: It should be activate or deactivate")
+        _switch_context(
+                root=root,
+                config=config,
+                reporter=progress_reporter,
+                context_operation=context_operation,
+                context_id=context_id,
+                community_level=community_level,
+                optimized_search=optimized_search,
+                use_kusto_community_reports=use_kusto_community_reports,
+            )
+        return
+    
 
-    if cli:
-        sys.exit(1 if encountered_errors else 0)
+    ################ INDEXING ITERATION
+    orig_storage_base=pipeline_config.storage.base_dir
+    orig_input_base="<RELATIVE PATH> "
+    #input_full_path = os.path.dirname(__file__) + '\\..\\.' + root + "\\" + pipeline_config.input.base_dir
+    #i_count=len(os.listdir(root+"\\input"))
+    input_full_path = "<ABSOLUTE PATH>"
+    folders=os.listdir(input_full_path)
+    i_count=len(folders)
+
+    logging.info("** indexer loop")
+    batch_size=30
+    batch_stat_f="batch_index.txt"
+    if not os.path.exists(batch_stat_f):
+        f=open(batch_stat_f,"w")
+        f.close()
+    
+    f=open(batch_stat_f,"r+")
+    f.seek(0,0)
+    c=f.read()
+    if len(c)>0:
+        batch_f_index=int(c)
+    else:
+        batch_f_index=0
+    
+    logging.info("Current batch: "+ str(batch_f_index))
+    end = min(i_count,batch_f_index+batch_size)
+    i_start=batch_f_index
+
+    if i_start==0:
+        logging.info("Loading document stats in kusto")
+        cc=_create_graphrag_config( root,config) #from query module
+        load_doc_stats(input_full_path,orig_storage_base,folders,context_id,cc.embeddings.vector_store)
+
+    for p_id in range(i_start,end):
+
+        pipeline_config.input.base_dir=f'{orig_input_base}\\{p_id}'
+        pipeline_config.storage.base_dir = f'{orig_storage_base}\\{p_id}'
+
+        #pipeline_config.input.base_dir=f'{orig_input_base}/{folders[p_id]}'
+        #pipeline_config.storage.base_dir = f'{orig_storage_base}/{p_id}'
+
+        logging.info("Working with input "+pipeline_config.input.base_dir)
+        logging.info("out "+pipeline_config.storage.base_dir)
+        
+        cache = NoopPipelineCache() if nocache else None
+        pipeline_emit = emit.split(",") if emit else None
+        encountered_errors = False
+
+        
+
+        _run_workflow_async()
+        progress_reporter.stop()
+        if encountered_errors:
+            progress_reporter.error(
+                "Errors occurred during the pipeline run, see logs for more details."
+            )
+            logging.info("[!] Got errors")
+            #exit(-1)
+        else:
+            progress_reporter.success("All workflows completed successfully.")
+            
+            
+            batch_f_index += 1
+            logging.info("Updating batch file index: "+str(batch_f_index))
+            f.seek(0,0)
+            f.write(str(batch_f_index))
+    
+    f.close()
+
+
 
 def _switch_context(root: str, config: str,
                     reporter: ProgressReporter, context_operation: str | None,
@@ -226,18 +356,17 @@ def _initialize_project_at(path: str, reporter: ProgressReporter) -> None:
     if not root.exists():
         root.mkdir(parents=True, exist_ok=True)
 
-    settings_yaml = root / "settings.yaml"
-    if settings_yaml.exists():
-        msg = f"Project already initialized at {root}"
-        raise ValueError(msg)
-
+    settings_yaml = root / "settings/settings.yaml"
+    
     dotenv = root / ".env"
     if not dotenv.exists():
         with settings_yaml.open("wb") as file:
             file.write(INIT_YAML.encode(encoding="utf-8", errors="strict"))
 
+    '''
     with dotenv.open("wb") as file:
         file.write(INIT_DOTENV.encode(encoding="utf-8", errors="strict"))
+    '''
 
     prompts_dir = root / "prompts"
     if not prompts_dir.exists():
@@ -287,10 +416,10 @@ def _create_default_config(
         raise ValueError(msg)
 
     parameters = _read_config_parameters(root, config, reporter)
-    log.info(
-        "using default configuration: %s",
-        redact(parameters.model_dump()),
-    )
+    #log.info(
+    #    "using default configuration: %s",
+    #    redact(parameters.model_dump()),
+    #)
 
     if verbose or dryrun:
         reporter.info(f"Using default configuration: {redact(parameters.model_dump())}")
@@ -368,3 +497,5 @@ def _enable_logging(root_dir: str, run_id: str, verbose: bool) -> None:
         level=logging.DEBUG if verbose else logging.INFO,
         handlers=[handler, fileHandler]
     )
+
+

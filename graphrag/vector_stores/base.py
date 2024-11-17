@@ -49,6 +49,7 @@ class BaseVectorStore(ABC):
         vector_name: str,
         reports_name: str,
         text_units_name: str,
+        docs_tbl_name:str,
         db_connection: Any | None = None,
         document_collection: Any | None = None,
         query_filter: Any | None = None,
@@ -58,6 +59,7 @@ class BaseVectorStore(ABC):
         self.vector_name = vector_name
         self.reports_name = reports_name
         self.text_units_name = text_units_name
+        self.docs_tbl_name=docs_tbl_name
         self.db_connection = db_connection
         self.document_collection = document_collection
         self.query_filter = query_filter
