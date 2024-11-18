@@ -147,10 +147,15 @@ def alerts(req: func.HttpRequest) -> func.HttpResponse:
     override=req.params.get('cube_id',None)
     with_keywords=False
 
-    if not expand:
+    if not expand: #initial search
         wk = req.params.get('kw',None)
-        if wk:
+        if wk=='1':
             with_keywords=True
+        elif wk !='0':
+            return func.HttpResponse(
+                "[!] Invalid parameters",
+                status_code=200
+            )
     
     output = alert_search(root_dir = "settings",
                             context_id=context_id,
