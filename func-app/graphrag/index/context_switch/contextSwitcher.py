@@ -74,6 +74,7 @@ class ContextSwitcher:
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
         config_args.update({"docs_tbl_name": f"docs_{self.context_id}"})
         config_args.update({"relationships_name": f"relationships_{self.context_id}"})
+        config_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{self.context_id}"})
 
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
 
@@ -279,11 +280,11 @@ class ContextSwitcher:
 
             relationships = []
             for r in relationships_aggergate:
-                r_per_txt = [] 
+                r_per_txt = []
                 txt_units = r.text_unit_ids
                 for unit in txt_units:
                     new_r= Relationship(source=r.source,
-                                        target=r.target,    
+                                        target=r.target,
                                         source_id=generate_entity_id(r.source),
                                         target_id = generate_entity_id(r.target),
                                         text_unit_embedding = txt_hmap[unit][0],
@@ -291,12 +292,12 @@ class ContextSwitcher:
                                         text_unit=txt_hmap[unit][1],
                                         id=r.id,
                                         short_id=r.short_id)
-                    
+
                     r_per_txt.append(new_r)
 
                 relationships += r_per_txt
 
- 
+
             description_embedding_store.load_entities(entities)
             if self.use_kusto_community_reports:
                 raise ValueError("Community reports not supported for kusto.")
@@ -308,7 +309,7 @@ class ContextSwitcher:
             if config.graphdb.enabled:
                 graph_db_client.write_vertices(final_entities, added_vertices)
                 graph_db_client.write_edges(final_relationships)
-                
+
 
         if config.graphdb.enabled:
             graph_db_client.wait_for_jobs()
