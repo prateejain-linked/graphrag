@@ -702,7 +702,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
             config_args=vector_store_args,
             context_id=context_id,
         )
-    
+
     text_embedder = get_text_embedder(config)
 
     ####################################################
@@ -722,7 +722,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         args['model_supports_json'] = config.llm.model_supports_json
         args['api_base'] = config.llm.api_base
         args['api_version'] = config.llm.api_version
-        args['deployment_name'] = config.llm.deployment_name          
+        args['deployment_name'] = config.llm.deployment_name
 
         llm_conf = {}
         llm_conf['llm'] = args
@@ -730,7 +730,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         single_try=True
 
         if single_try:
-            llm_conf['max_gleanings'] = 0 
+            llm_conf['max_gleanings'] = 0
 
         q_entities = asyncio.run(run_gi(
             docs=[Document(text=query, id=str(randint(1,1000)))],
@@ -741,7 +741,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         ))
 
         q_entities=q_entities.entities
-        
+
         if len(q_entities)==0:
             print("[!] Query entitiy extraction failed. Check your query.")
 
@@ -759,7 +759,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         for i in range(len(q_entities)):
             keep=0
             tmp=q_entities[i]['name'].lower()
-            
+
             for k in keepers:
                 if k in tmp:
                     keep=1
@@ -767,15 +767,15 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
                 if tmp in excluders: # or (" " in tmp and tmp != q_entities[i]['type'].lower()):
                     print(f"ignoring <{tmp}>")
                     spare.append(tmp)
-                    continue 
+                    continue
 
-                if tmp[-1]=='s': 
+                if tmp[-1]=='s':
                     print(f"Changing <{tmp}>")
                     if tmp[:-1] in excluders:
                         continue
 
             keywords.append(tmp)
-        
+
         if len(keywords)==0 :
             keywords=spare
 
@@ -798,7 +798,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
     gr.add_node('<G>')
     colors=['grey']
     def add_node(dc,g,node:str,color):
-        if node in dc: return 
+        if node in dc: return
         dc[node]=1
         g.add_node(node)
         colors.append(color)
@@ -810,7 +810,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         s += f"{source} -> {target} : {r.description}\n\n"
 
         color='blue'
-        if not expand: 
+        if not expand:
             for e in keywords:
                 if e in (source.lower(),target.lower()) or e in r.description.lower():
                     color='red'
@@ -821,7 +821,7 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         gr.add_edge(source, target, _desc=r.description)
         gr.add_edge("<G>",source)
 
-    
+
     r=nx.generate_graphml(gr)
     r="\n".join(r)
     return r
