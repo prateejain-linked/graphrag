@@ -630,7 +630,7 @@ def generate_graph(context_id,query,root_dir='settings'):
     kusto_client.connect(**vector_store_args)
     matching_relationships = kusto_client.get_matching_relationships(query=query,text_embedder=text_embedder.embed)
     graph = nx.Graph()
-    graph.add_node("0",name="<G>")
+    graph.add_node("0",name="Root")
     sources = set()
     for matching_relationship in matching_relationships:
         sources.add(matching_relationship.source_id)
@@ -643,7 +643,7 @@ def generate_graph(context_id,query,root_dir='settings'):
             matching_relationship.source_id,
             matching_relationship.target_id,
             text_unit = matching_relationship.text_unit_ids[0],
-            description = "Relevant edge",
+            description = matching_relationship.text_unit_ids[0],
         )
     for source_id in sources:
         graph.add_edge(
@@ -819,9 +819,9 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         add_node(added_nodes,gr,target,color)
 
         gr.add_edge(source, target, _desc=r.description)
-        gr.add_edge("<G>",source)
+        gr.add_edge("<G>",source,_desc="Initial source")
 
     
-    r=nx.generate_graphml(gr)
+    r=nx.generate_graphml(gr,named_key_ids=True)
     r="\n".join(r)
     return r
