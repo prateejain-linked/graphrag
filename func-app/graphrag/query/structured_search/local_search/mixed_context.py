@@ -79,6 +79,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         ext_entities=[],
         ext_relationships=[],
         ext_text_units=[],
+        skip_text_unit_context = False
         
     ):
         if community_reports is None:
@@ -109,6 +110,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         self.ext_entities=ext_entities
         self.ext_relationships=ext_relationships
         self.ext_text_units=ext_text_units
+        self.skip_text_unit_context = skip_text_unit_context
 
     def filter_by_entity_keys(self, entity_keys: list[int] | list[str]):
         """Filter entity text embeddings by entity keys."""
@@ -492,7 +494,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         if local_context.strip() != "":
             final_context.append(str(local_context))
             final_context_data = {**final_context_data, **local_context_data}
-        if not self.is_optimized_search:
+        if ext_text_units != []:
             # build text unit context
             text_unit_tokens = max(int(max_tokens * text_unit_prop), 0)
 
@@ -618,88 +620,88 @@ class LocalSearchMixedContext(LocalContextBuilder):
     ) -> tuple[str, dict[str, pd.DataFrame]]:
         
 
-        if ext_text_units==[]:
-            selected_text_units=vector_store.retrieve_text_units(selected_entities)
+        selected_text_units = []
 
-            units_dc={}
-            for u in selected_text_units:
-                units_dc[u.id]=u 
+        if not self.skip_text_unit_context :
+            if ext_text_units==[]:
+                selected_text_units=vector_store.retrieve_text_units(selected_entities)
 
-            selected_text_units=[]
-            added_units={}
-            for e in selected_entities: #sort based on entity description proximity score
-                if e.text_unit_ids=='' or e.text_unit_ids==None:
-                    continue
-                units=ast.literal_eval(e.text_unit_ids)
-                for uid in units:
-                    if uid in units_dc:
-                        if  uid not in added_units:
-                            selected_text_units.append(units_dc[uid])
-                            added_units[uid]=1
-                    else:
-                        print(f"Text unit {uid} not found")
-                        exit(-1)
-            
-            # if path 0,3, we have relationship text units to add to the context
-            # Send these units to lower orders. Probably will be ignored by build_text_unit_context()
-            related_unit_ids=[]
-            for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
-                for related in related_groups:
-                    text_unit_list=ast.literal_eval(related['text_unit_ids'])
-                    # a relationship might associated with multiple textunits
-                    related_unit_ids += text_unit_list
-            if related_unit_ids!=[]:
-                selected_text_units += vector_store.retrieve_text_units_by_id(related_unit_ids)
+                units_dc={}
+                for u in selected_text_units:
+                    units_dc[u.id]=u 
 
-            hmap={}
-            text_units_kusto={}
-            for unit in selected_text_units:
-                if unit.id not in hmap:
-                    hmap[unit.id]=unit
-                    text_units_kusto[unit.id]=ast.literal_eval(unit.document_ids) if (
-                        unit.document_ids!='' and unit.document_ids!=None ) else []
-            
-            selected_text_units=[]
-            for id in hmap:
-                selected_text_units.append(hmap[id])
-
+                selected_text_units=[]
+                added_units={}
+                for e in selected_entities: #sort based on entity description proximity score
+                    if e.text_unit_ids=='' or e.text_unit_ids==None:
+                        continue
+                    units=ast.literal_eval(e.text_unit_ids)
+                    for uid in units:
+                        if uid in units_dc:
+                            if  uid not in added_units:
+                                selected_text_units.append(units_dc[uid])
+                                added_units[uid]=1
+                        else:
+                            print(f"Text unit {uid} not found")
+                            exit(-1)
                 
-            self.text_units_kusto=text_units_kusto
+                # if path 0,3, we have relationship text units to add to the context
+                # Send these units to lower orders. Probably will be ignored by build_text_unit_context()
+                related_unit_ids=[]
+                for related_groups in entity_to_related_entities.values() if entity_to_related_entities else []:
+                    for related in related_groups:
+                        text_unit_list=ast.literal_eval(related['text_unit_ids'])
+                        # a relationship might associated with multiple textunits
+                        related_unit_ids += text_unit_list
+                if related_unit_ids!=[]:
+                    selected_text_units += vector_store.retrieve_text_units_by_id(related_unit_ids)
 
-            #ignore sorting selected_text_units based on relationship count
+                hmap={}
+                text_units_kusto={}
+                for unit in selected_text_units:
+                    if unit.id not in hmap:
+                        hmap[unit.id]=unit
+                        text_units_kusto[unit.id]=ast.literal_eval(unit.document_ids) if (
+                            unit.document_ids!='' and unit.document_ids!=None ) else []
+                
+                selected_text_units=[]
+                for id in hmap:
+                    selected_text_units.append(hmap[id])
 
-            def str_to_list(unit,column):
-                cvar = getattr(unit,column)
-                if cvar == '' or cvar==None:
-                    setattr(unit,column,[])
-                    return
-                setattr(unit,column,ast.literal_eval(cvar))
+                    
+                self.text_units_kusto=text_units_kusto
 
-            #target_unit_margin='baf101552b1a06993bb46b037ede1346cb3823273c5d53d67ca7fe61e61ada44'
-            #target_unit_margin='1d508582ddd16fb1cfc080227a722a8e69047d0c833073ca7f0031c555bb68da'
+                #ignore sorting selected_text_units based on relationship count
 
-            for unit in selected_text_units:
-                str_to_list(unit,'entity_ids')
-                str_to_list(unit,'relationship_ids')
-                str_to_list(unit,'document_ids')
+                def str_to_list(unit,column):
+                    cvar = getattr(unit,column)
+                    if cvar == '' or cvar==None:
+                        setattr(unit,column,[])
+                        return
+                    setattr(unit,column,ast.literal_eval(cvar))
 
-                ### EMAIL DATASET
-                body_only=False
-                if body_only:
-                    txt=unit.text
-                    loc = txt.find("\"body\"")
-                    if loc > -1 :
-                        unit.text = txt[loc+8:]
-                    # if text unit starts from middle of email we don't have body keyword
+                for unit in selected_text_units:
+                    str_to_list(unit,'entity_ids')
+                    str_to_list(unit,'relationship_ids')
+                    str_to_list(unit,'document_ids')
 
-                #if unit.id==target_unit_margin:
-                #    print('Target source')
-                # print("Adding source: "+unit.text)
-                #if 'margin' in unit.text:
-                #    print("Got relevance\n",unit.text)
-        else:
-            selected_text_units=ext_text_units
-            self.text_units_kusto={}
+                    ### EMAIL DATASET
+                    body_only=False
+                    if body_only:
+                        txt=unit.text
+                        loc = txt.find("\"body\"")
+                        if loc > -1 :
+                            unit.text = txt[loc+8:]
+                        # if text unit starts from middle of email we don't have body keyword
+
+                    #if unit.id==target_unit_margin:
+                    #    print('Target source')
+                    # print("Adding source: "+unit.text)
+                    #if 'margin' in unit.text:
+                    #    print("Got relevance\n",unit.text)
+            else:
+                selected_text_units=ext_text_units
+                self.text_units_kusto={}
 
         context_text, context_data = build_text_unit_context(
             text_units=selected_text_units,

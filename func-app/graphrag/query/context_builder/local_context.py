@@ -169,6 +169,9 @@ def build_relationship_context(
     graphdb_client: GraphDBClient|None=None,
 ) -> tuple[str, pd.DataFrame]:
     """Prepare relationship data tables as context data for system prompt."""
+
+
+
     selected_relationships = _filter_relationships(
         selected_entities=selected_entities,
         relationships=relationships,
@@ -216,7 +219,7 @@ def build_relationship_context(
         new_context_text = ""
         new_tokens = 0
         if not is_optimized_search:
-            new_context_text = column_delimiter.join(str(new_context)) + "\n"
+            new_context_text = column_delimiter.join(new_context) + "\n"
             new_tokens = num_tokens(new_context_text, token_encoder)
             if current_tokens + new_tokens > max_tokens:  #General: There could be side impact of generating huge number of relationships
                 break
@@ -242,6 +245,12 @@ def _filter_relationships(
     graphdb_client: GraphDBClient|None=None,
 ) -> list[Relationship]:
     """Filter and sort relationships based on a set of selected entities and a ranking attribute."""
+
+
+    # We do not need filtering at this stage for our use case. Also the code
+    # has a bug.
+    return relationships
+
     # First priority: in-network relationships (i.e. relationships between selected entities)
     in_network_relationships = get_in_network_relationships(
         selected_entities=selected_entities,

@@ -213,6 +213,7 @@ def get_summarizer(
     external_entities:list[Entity],
     external_relationships: list[Relationship],
     external_text_units: list[TextUnit],
+    skip_text_unit_context = False
 ) :
     llm = get_llm(config)
     text_embedder = get_text_embedder(config)
@@ -231,7 +232,8 @@ def get_summarizer(
             config=config,
             ext_entities=external_entities,
             ext_relationships=external_relationships,
-            ext_text_units=external_text_units
+            ext_text_units=external_text_units,
+            skip_text_unit_context=skip_text_unit_context
         ),
         token_encoder=token_encoder,
         llm_params={

@@ -164,6 +164,6 @@ def alerts(req: func.HttpRequest) -> func.HttpResponse:
                             expand=expand,
                             override=override)
     return func.HttpResponse(
-        str(output),
+        json.dumps(output),
         status_code=200
     )

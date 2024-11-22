@@ -684,7 +684,11 @@ def expand_node_graph(node,context_id,query,depth,root_dir='settings', override=
     graph_expander = GraphExpanderMaximumSimilarityEdge(kusto_client,graphdb_client,text_embedder)
     return graph_expander.expand_node(node=node,depth=depth,top_k=2,query=query,excluding_edges_ids=excluding_edges_ids,use_kusto=True)
 
-def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,override=None):
+def alert_search(root_dir,context_id, query,with_keywords=False,
+    expand=False,
+    override=None,
+    response_type="multiple paragraphs"):
+
     _, _, config = _configure_paths_and_settings(
         data_dir='', root_dir=root_dir,config_dir=None,override=override
     )
@@ -791,16 +795,15 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
                 )
     #####################################################################
 
-    print(f"targeting {len(rels)} rows")
-
     added_nodes={}
     gr = nx.Graph()
-    gr.add_node('<G>')
+    root_label="Global"
+    gr.add_node(root_label)
     colors=['grey']
     def add_node(dc,g,node:str,color):
         if node in dc: return 
         dc[node]=1
-        g.add_node(node)
+        g.add_node(node,_color=color)
         colors.append(color)
 
     s=""
@@ -819,9 +822,39 @@ def alert_search(root_dir,context_id, query,with_keywords=False,expand=False,ove
         add_node(added_nodes,gr,target,color)
 
         gr.add_edge(source, target, _desc=r.description)
-        gr.add_edge("<G>",source,_desc="Initial source")
+        gr.add_edge(root_label,source,_desc="Initial source")
 
     
     r=nx.generate_graphml(gr,named_key_ids=True)
     r="\n".join(r)
-    return r
+
+    response = {'graph':r , 'summ':''}
+
+    # Summarization
+
+    entities=[]
+    emap={}
+    def add_entity(elist):
+        for e in elist:
+            if e not in emap:
+                emap[e]=1
+                new_e= Entity(id='0',short_id='0',title=e,description='')
+                entities.append(new_e)
+
+    for r in rels:
+        add_entity([r.source,r.target])
+
+
+    summarizer = get_summarizer(
+        config=config,
+        response_type=response_type,
+        external_entities=entities,
+        external_relationships=rels,
+        external_text_units=[],
+        skip_text_unit_context = True
+    )
+    result = summarizer.summarize(query)
+
+    response['summ']= result.response
+
+    return response
