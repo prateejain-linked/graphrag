@@ -142,3 +142,4 @@ azure.functions
 future
 pandas
 uvloop; platform_system == 'Linux'
+pyspark
