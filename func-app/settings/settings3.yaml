@@ -95,3 +95,8 @@ input:
 
 storage:
   container_name: indexingalert
+
+chunks:
+  size: 10000
+  overlap: 100
+  group_by_columns: [id]
