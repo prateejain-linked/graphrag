@@ -95,3 +95,8 @@ input:
 
 storage:
   container_name: indexingalert
+
+
+entity_extraction:
+  prompt: "prompts/alertinfo_kusto.txt"
+  entity_types: [userkey,email,sensitivedata,operation,file,alertid,policyid,managedruleid]
