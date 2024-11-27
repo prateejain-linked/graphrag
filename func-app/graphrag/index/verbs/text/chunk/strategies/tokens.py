@@ -12,8 +12,10 @@ from datashaper import ProgressTicker
 import graphrag.config.defaults as defs
 from graphrag.index.text_splitting import Tokenizer
 from graphrag.index.verbs.text.chunk.typing import TextChunk
+from graphrag.common.utils.common_utils import __CS__exit
+import json
 
-
+OPERATION_MODE = "ALERTLOG" #"NORMAL"
 def run(
     input: list[str], args: dict[str, Any], tick: ProgressTicker
 ) -> Iterable[TextChunk]:
@@ -31,16 +33,28 @@ def run(
     def decode(tokens: list[int]) -> str:
         return enc.decode(tokens)
 
-    return split_text_on_tokens(
-        input,
-        Tokenizer(
-            chunk_overlap=chunk_overlap,
-            tokens_per_chunk=tokens_per_chunk,
-            encode=encode,
-            decode=decode,
-        ),
-        tick,
-    )
+    if OPERATION_MODE=="ALERTLOG":
+        return __CS__split_text_on_records(
+            input,
+            Tokenizer(
+                chunk_overlap=chunk_overlap,
+                tokens_per_chunk=tokens_per_chunk,
+                encode=encode,
+                decode=decode,
+            ),
+            tick,
+        )
+    else:
+        return split_text_on_tokens(
+            input,
+            Tokenizer(
+                chunk_overlap=chunk_overlap,
+                tokens_per_chunk=tokens_per_chunk,
+                encode=encode,
+                decode=decode,
+            ),
+            tick,
+        )
 
 
 # Adapted from - https://github.com/langchain-ai/langchain/blob/77b359edf5df0d37ef0d539f678cf64f5557cb54/libs/langchain/langchain/text_splitter.py#L471
@@ -64,6 +78,7 @@ def split_text_on_tokens(
     start_idx = 0
     cur_idx = min(start_idx + enc.tokens_per_chunk, len(input_ids))
     chunk_ids = input_ids[start_idx:cur_idx]
+ 
     while start_idx < len(input_ids):
         chunk_text = enc.decode([id for _, id in chunk_ids])
         doc_indices = list({doc_idx for doc_idx, _ in chunk_ids})
@@ -77,5 +92,28 @@ def split_text_on_tokens(
         start_idx += enc.tokens_per_chunk - enc.chunk_overlap
         cur_idx = min(start_idx + enc.tokens_per_chunk, len(input_ids))
         chunk_ids = input_ids[start_idx:cur_idx]
+
+    return result
+
+
+
+def __CS__split_text_on_records(
+    texts: list[str], enc: Tokenizer, tick: ProgressTicker
+) -> list[TextChunk]:
+
+    result=[]
+
+    if enc.tokens_per_chunk < 10000:
+        __CS__exit("Chunk size too small for demo")
+
+    for doc in texts: # normally one
+        try:    
+            records=json.loads(doc)
+        except:
+            __CS__exit("Input must be a valid json file.")
+
+        for record in records:
+            result += split_text_on_tokens([json.dumps(record)],enc,tick)
+
 
     return result
