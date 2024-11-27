@@ -26,6 +26,7 @@ DEFAULT_RECORD_DELIMITER = "##"
 DEFAULT_COMPLETION_DELIMITER = "<|COMPLETE|>"
 DEFAULT_ENTITY_TYPES = ["organization", "person", "geo", "event"]
 
+import graphrag.common.utils.common_utils as utils
 
 @dataclass
 class GraphExtractionResult:
@@ -156,6 +157,9 @@ class GraphExtractor:
             },
         )
         results = response.output or ""
+
+        if utils.CS__env(utils.DIS_EXT_RETRY):
+            self._max_gleanings=0
 
         # Repeat to ensure we maximize entity count
         for i in range(self._max_gleanings):

@@ -74,7 +74,7 @@ class ContextSwitcher:
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
         config_args.update({"docs_tbl_name": f"docs_{self.context_id}"})
         config_args.update({"relationships_name": f"relationships_{self.context_id}"})
-
+        config_args.update({"relationships_AUDIT_name": f"relationships_AUDIT_{self.context_id}"})
         config_args.update({"text_units_name": f"text_units_{self.context_id}"})
 
         return VectorStoreFactory.get_vector_store(
@@ -95,6 +95,7 @@ class ContextSwitcher:
 
         description_embedding_store.setup_text_units()
         description_embedding_store.setup_relationships()
+        description_embedding_store.setup_relationships_AUDIT()
 
         return description_embedding_store
 
@@ -304,6 +305,7 @@ class ContextSwitcher:
 
             description_embedding_store.load_text_units(text_units)
             description_embedding_store.load_relationships(relationships)
+            description_embedding_store.load_relationships_AUDIT(relationships_aggergate)
 
             if config.graphdb.enabled:
                 graph_db_client.write_vertices(final_entities, added_vertices)

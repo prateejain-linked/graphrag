@@ -4,6 +4,8 @@
 """A module containing build_steps method definition."""
 
 from graphrag.index.config import PipelineWorkflowConfig, PipelineWorkflowStep
+from graphrag.common.utils.common_utils import __CS__env, EMBED_RELS
+
 
 workflow_name = "create_final_relationships"
 
@@ -22,6 +24,9 @@ def build_steps(
         "relationship_description_embed", base_text_embed
     )
     skip_description_embedding = config.get("skip_description_embedding", False)
+
+    if __CS__env(EMBED_RELS):
+        skip_description_embedding = False
 
     return [
         {

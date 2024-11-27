@@ -54,7 +54,7 @@ def read_indexer_relationships(final_relationships: pd.DataFrame) -> list[Relati
     return read_relationships(
         df=final_relationships,
         short_id_col="human_readable_id",
-        description_embedding_col=None,
+        description_embedding_col="description_embedding",
         document_ids_col=None,
         attributes_cols=["rank"],
     )
