@@ -115,7 +115,7 @@ def index_cli(
     if input_base_dir is not None:
         logging.info(f"input_base_dir is {input_base_dir}, overwriting in config")
         pipeline_config.input.base_dir = input_base_dir
-    
+
     if output_base_dir is not None:
         logging.info(f"input_base_dir is {output_base_dir}, overwriting in config")
         pipeline_config.storage.base_dir = output_base_dir
@@ -139,7 +139,7 @@ def index_cli(
         # Register signal handlers for SIGINT and SIGHUP
         logging.info("Step2")
         #signal.signal(signal.SIGINT, handle_signal)
-        
+
         logging.info("Step3")
         #if sys.platform != "win32":
         #    signal.signal(signal.SIGHUP, handle_signal)
@@ -188,11 +188,11 @@ def index_cli(
 
         #     uvloop.install()
         #     asyncio.run(execute())
-    
+
     #If there is a list of target files that has been provided as an input, then modify the file pattern to include them only.
     if len(files) > 0:
         pipeline_config.input.file_pattern = get_target_file_pattern(files=files)
-    
+
     _run_workflow_async()
     progress_reporter.stop()
     if encountered_errors:
@@ -244,25 +244,25 @@ def _initialize_project_at(path: str, reporter: ProgressReporter) -> None:
         root.mkdir(parents=True, exist_ok=True)
 
     settings_yaml = root / "settings/settings.yaml"
-    
-    dotenv = root / ".env"
-    
 
-    
+    dotenv = root / ".env"
+
+
+
 
     prompts_dir = root / "prompts"
-    
+
 
     entity_extraction = prompts_dir / "entity_extraction.txt"
-    
+
 
     summarize_descriptions = prompts_dir / "summarize_descriptions.txt"
 
     claim_extraction = prompts_dir / "claim_extraction.txt"
-    
+
 
     community_report = prompts_dir / "community_report.txt"
-    
+
 
 
 def _create_default_config(
@@ -320,6 +320,23 @@ def _read_config_parameters(root: str, config: str | None, reporter: ProgressRep
             import yaml
 
             data = yaml.safe_load(file.read().decode(encoding="utf-8", errors="strict"))
+
+            import os
+            override = os.getenv("CUBE_ID")
+
+            if override:
+                # If override is provided, update data reading in an additional file
+                # The override file is in the form of path to config removing the file from the path and instead adding the file config-directory/settings<override>.yaml
+                override_yaml = Path(_root) / f"settings/settings{override}.yaml"
+                if override_yaml.exists():
+                    with override_yaml.open(
+                        "rb",
+                    ) as file:
+                        override_data = yaml.safe_load(
+                            file.read().decode(encoding="utf-8", errors="strict")
+                        )
+                        from graphrag.query.cli import inplace_update
+                        data = inplace_update(data, override_data)
             return create_graphrag_config(data, root)
 
     if settings_json.exists():
