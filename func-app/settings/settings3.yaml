@@ -7,7 +7,7 @@ llm:
   # max_tokens: 4000
   # request_timeout: 180.0
   model: gpt-4o
-  api_base: https://contentstore-oai.openai.azure.com/
+  api_base: https://alerts-oai3.openai.azure.com/
   api_version: 2024-02-15-preview
   # organization: <organization_id>
   deployment_name: gpt-4o
@@ -28,7 +28,7 @@ embeddings:
     type: azure_openai_embedding #openai_embedding # or azure_openai_embedding
     model: text-embedding-3-small
     api_base: https://contentstore-oai.openai.azure.com/
-    api_version: 2024-02-15-preview
+    api_version: "2023-05-15"
     # organization: <organization_id>
     deployment_name: text-embedding-3-small
 
@@ -89,3 +89,9 @@ snapshots:
   graphml: false
   raw_entities: false
   top_level_nodes: false
+
+input:
+  container_name: anon-prod
+
+storage:
+  container_name: indexingalert
