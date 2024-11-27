@@ -43,9 +43,9 @@ embeddings:
 
 
 entity_extraction:
-  prompt: "prompts/alertinfo_kusto.txt" # "prompts/emails.txt"
-  entity_types: [userkey,email,sensitivedata,operation,file,alertid,policyid,managedruleid] 
-  max_gleanings: 1
+  prompt: "prompts/alertinfo_kusto.txt"
+  entity_types: [userkey,email,sensitivedata,operation,file,alertid,policyid,managedruleid]
+
 
 summarize_descriptions:
   ## llm: override the global llm settings for this task
@@ -95,8 +95,3 @@ input:
 
 storage:
   container_name: indexingalert
-
-
-entity_extraction:
-  prompt: "prompts/alertinfo_kusto.txt"
-  entity_types: [userkey,email,sensitivedata,operation,file,alertid,policyid,managedruleid]
